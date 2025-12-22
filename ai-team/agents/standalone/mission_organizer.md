@@ -20,19 +20,9 @@ You set up new missions. You do NOT plan, implement, or verify.
 
 3. **Create mission folder**: `ai-team/missions/<mission-id>/`
 
-4. **Create `progress.yaml`**: Copy from `ai-team/missions/PROGRESS_TEMPLATE.yaml` and fill the `mission_context` section. Leave `scientist_plan` and all other sections with empty/placeholder values.
+4. **Create `progress.yaml`**: Copy from `ai-team/missions/PROGRESS_TEMPLATE.yaml`, fill the `mission_context` section, and set `current_agent: "scientist"`. Leave `scientist_plan` and all other sections with empty/placeholder values.
 
-5. **Create `AGENT_CALL.md`**: Initialize with scientist role:
-   ```markdown
-   Please follow:
-   - `ai-team/CONTRACT.md`
-   - `ai-team/agents/mission/scientist.md`
-
-   INPUTS:
-   - Progress Artifact: `ai-team/missions/<mission-id>/progress.yaml`
-   ```
-
-6. **Report** the created paths to the user.
+5. **Report** the created paths to the user.
 
 ## Output format
 
@@ -41,10 +31,9 @@ After setup, display:
 ✅ Mission created: <mission-id>
 
 📁 ai-team/missions/<mission-id>/
-├── progress.yaml   (Mission Context filled)
-└── AGENT_CALL.md   (scientist ready)
+└── progress.yaml   (Mission Context filled, current_agent: scientist)
 
-To start: "Please follow ai-team/missions/<mission-id>/AGENT_CALL.md"
+To start: scripts/mycelium next ai-team/missions/<mission-id>
 ```
 
 ## Authority boundaries
@@ -52,3 +41,4 @@ To start: "Please follow ai-team/missions/<mission-id>/AGENT_CALL.md"
 - Do NOT write the Scientist Plan — that's the Scientist's job.
 - Do NOT run commands or write code.
 - If instructions are too vague to extract Mission Context fields, STOP and ask for clarification.
+

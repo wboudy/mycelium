@@ -32,13 +32,14 @@ Please follow ai-team/agents/standalone/mission_organizer.md with these instruct
 The Mission Organizer will:
 1. Parse your instructions into Mission Context format
 2. Create `ai-team/missions/<mission-id>/` folder
-3. Set up `progress.yaml` with Mission Context filled
-4. Initialize `AGENT_CALL.md` with scientist ready
+3. Set up `progress.yaml` with Mission Context filled and `current_agent: scientist`
 
-Then start the mission:
+Then start the mission using the CLI:
+```bash
+scripts/mycelium next ai-team/missions/<mission-id>
 ```
-Please follow ai-team/missions/<mission-id>/AGENT_CALL.md
-```
+
+This generates the agent prompt and copies it to your clipboard.
 
 ---
 
@@ -48,15 +49,14 @@ Please follow ai-team/missions/<mission-id>/AGENT_CALL.md
 - `ai-team/CONTRACT.md` — global rules, decisions, stop conditions, scale guidelines
 - `ai-team/agents/mission/*.md` — mission agent role definitions
 - `ai-team/agents/standalone/*.md` — standalone agent role definitions
-- `ai-team/missions/AGENT_CALL_TEMPLATE.md` — agent invocation template
 - `ai-team/missions/PROGRESS_TEMPLATE.yaml` — progress artifact structure
 - `ai-team/WORKFLOW.md` — this file
+- `scripts/mycelium` — CLI for agent prompt generation
 
 ### Per-mission files
 ```
 ai-team/missions/<mission-id>/
-├── progress.yaml   # Progress Artifact (YAML format)
-├── AGENT_CALL.md   # Current agent call
+└── progress.yaml   # Progress Artifact (YAML format, includes current_agent)
 ```
 
 ---
@@ -69,53 +69,61 @@ Use the Mission Organizer to set up a new mission from natural language:
 Please follow ai-team/agents/standalone/mission_organizer.md with these instructions:
 <your instructions here>
 ```
-The Mission Organizer creates the folder, `progress.yaml`, and `AGENT_CALL.md` automatically.
+The Mission Organizer creates the folder and `progress.yaml` with `current_agent: scientist`.
 
 ### 2. Call Scientist
-- Paste `ai-team/missions/<mission-id>/AGENT_CALL.md` into agent dashboard
+```bash
+scripts/mycelium next ai-team/missions/<mission-id>
+```
+- Paste the generated prompt into agent dashboard
 - Scientist fills: DoD, Plan, Checklist mode
-- Scientist updates `AGENT_CALL.md` → implementer (automatic)
+- Scientist updates `current_agent` → implementer (automatic)
 - **Note:** Scientist may ask for decisions if scope is unclear — make the call and let them continue
 
 ### 3. Call Implementer
-- Paste `AGENT_CALL.md` into agent dashboard
+```bash
+scripts/mycelium next ai-team/missions/<mission-id>
+```
+- Paste the generated prompt into agent dashboard
 - Implementer executes plan, logs iteration
-- Implementer updates `AGENT_CALL.md` → verifier (automatic)
+- Implementer updates `current_agent` → verifier (automatic)
 
 ### 4. Call Verifier
-- Paste `AGENT_CALL.md` into agent dashboard
+```bash
+scripts/mycelium next ai-team/missions/<mission-id>
+```
+- Paste the generated prompt into agent dashboard
 - Verifier checks DoD, reports PASS/FAIL
-- If FAIL: updates `AGENT_CALL.md` → implementer (automatic)
-- If PASS: updates `AGENT_CALL.md` → maintainer (automatic)
+- If FAIL: updates `current_agent` → implementer (automatic)
+- If PASS: updates `current_agent` → maintainer (automatic)
 
 ### 5. Iterate until PASS
-- Keep pasting `AGENT_CALL.md` — sequencing is automatic
-- **Human intervention:** If any agent hits a stop condition (ambiguous requirements, design decision needed, unclear failure), they will ask you. Make the decision, then re-paste `AGENT_CALL.md` to continue.
+- Keep running `scripts/mycelium next` — sequencing is automatic via `current_agent` field
+- **Human intervention:** If any agent hits a stop condition (ambiguous requirements, design decision needed, unclear failure), they will ask you. Make the decision, then re-run the CLI to continue.
 
 ### 6. Maintainer
 - Adds cleanup notes and **Maintainer Summary** to `progress.yaml`
 - Generates commit message at the end
-- **Deletes `AGENT_CALL.md`** to signal mission completion
+- Sets `current_agent` to empty string to signal mission completion
 - Mission is complete after Maintainer finishes
 
 ---
 
 ## Agent Self-Sequencing
 
-Each agent updates `AGENT_CALL.md` before completing:
+Each agent updates `current_agent` in progress.yaml before completing:
 
 | Current Agent | On Success | On Failure |
 |---------------|------------|------------|
-| Scientist | → Implementer | STOP (ask user) |
-| Implementer | → Verifier | → Verifier |
-| Verifier (PASS) | → Maintainer | — |
-| Verifier (FAIL) | — | → Implementer |
-| Maintainer | Delete `AGENT_CALL.md` | STOP (ask user) |
+| Scientist | → implementer | STOP (ask user) |
+| Implementer | → verifier | → verifier |
+| Verifier (PASS) | → maintainer | — |
+| Verifier (FAIL) | — | → implementer |
+| Maintainer | → "" (empty) | STOP (ask user) |
 
-**How to update**: Replace the agent line in `AGENT_CALL.md`:
-```diff
-- - `ai-team/agents/mission/scientist.md`
-+ - `ai-team/agents/mission/implementer.md`
+**How to update**: Change the `current_agent` field in progress.yaml:
+```yaml
+current_agent: "implementer"
 ```
 
 ---
@@ -135,8 +143,8 @@ See `ai-team/agents/standalone/repo_maintainer.md` for details.
 
 You can run multiple missions in parallel:
 - Each mission has its own folder in `ai-team/missions/`
-- Each has its own `AGENT_CALL.md`
-- Paste different mission's AGENT_CALL into separate agent tabs
+- Each has its own `progress.yaml` with its own `current_agent`
+- Run `scripts/mycelium next` with different mission paths
 
 ---
 
@@ -159,3 +167,4 @@ If something "works," the Progress Artifact must contain:
 - One canonical command to run
 - Expected outputs / paths
 - Verifier confirmation (PASS)
+

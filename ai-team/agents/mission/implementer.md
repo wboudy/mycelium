@@ -29,8 +29,8 @@ You will be called repeatedly until Verifier reports PASS.
 
 ## Self-sequencing (MANDATORY)
 
-Before completing, update `AGENT_CALL.md` (in the mission folder) to call the next agent:
-```diff
-- - `ai-team/agents/mission/implementer.md`
-+ - `ai-team/agents/mission/verifier.md`
+Before completing, update `current_agent` field in the Progress Artifact:
+```yaml
+current_agent: "verifier"
 ```
+

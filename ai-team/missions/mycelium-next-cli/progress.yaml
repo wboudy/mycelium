@@ -1,0 +1,232 @@
+# Progress Artifact — mycelium-next-cli
+# Copy to: ai-team/missions/<mission-id>/progress.yaml
+# 
+# This YAML structure is the single source of truth for mission progress.
+# All agents read from and write to this file.
+
+# -------------------------------------------------------------------
+# CURRENT AGENT (tracks which agent runs next)
+# -------------------------------------------------------------------
+current_agent: ""
+
+# -------------------------------------------------------------------
+# MISSION CONTEXT (filled by Mission Organizer)
+# -------------------------------------------------------------------
+mission_context:
+  phase: "Tooling / Automation"
+  
+  objective: "Create a mycelium next CLI that eliminates manual AGENT_CALL.md management by tracking mission state in progress.yaml and generating agent prompts automatically."
+  
+  scope:
+    - "Add current_agent field to PROGRESS_TEMPLATE.yaml to track which agent runs next"
+    - "Create mycelium CLI tool that reads progress.yaml and generates agent prompts"
+    - "CLI combines: CONTRACT.md reference + agent file + progress artifact path"
+    - "CLI prints prompt to stdout AND copies to clipboard in one command"
+    - "Update all mission agents (scientist, implementer, verifier, maintainer) to read/write current_agent field instead of editing AGENT_CALL.md"
+    - "Delete AGENT_CALL_TEMPLATE.md once complete"
+  
+  constraints:
+    - "Scope is prompt generation + clipboard ONLY"
+    - "No API calls or LLM invocation"
+    - "Must work with the existing YAML progress artifact structure"
+    - "CLI should be minimal and single-purpose"
+  
+  non_goals:
+    - "LLM API integration"
+    - "Automated agent execution"
+    - "Web UI or dashboard"
+    - "Mission creation (that's mission_organizer's job)"
+
+# -------------------------------------------------------------------
+# SCIENTIST PLAN (filled by Scientist agent)
+# -------------------------------------------------------------------
+scientist_plan:
+  progress_artifact_path: "ai-team/missions/mycelium-next-cli/progress.yaml"
+  
+  checklist_mode: "SMOKE"
+  
+  definition_of_done:
+    - description: "PROGRESS_TEMPLATE.yaml contains a `current_agent` field at the top level"
+      status: "pending"
+    - description: "`mycelium next` CLI command exists and is executable from repo root"
+      status: "pending"
+    - description: "CLI reads `current_agent` from a progress.yaml file and outputs the full agent prompt to stdout"
+      status: "pending"
+    - description: "CLI copies the generated prompt to system clipboard"
+      status: "pending"
+    - description: "All 4 mission agents (scientist, implementer, verifier, maintainer) update `current_agent` field instead of editing AGENT_CALL.md"
+      status: "pending"
+    - description: "AGENT_CALL_TEMPLATE.md is deleted"
+      status: "pending"
+    - description: "mission_organizer sets initial `current_agent` to 'scientist' instead of creating AGENT_CALL.md"
+      status: "pending"
+  
+  plan_steps:
+    - step: 1
+      description: "Add `current_agent` field to PROGRESS_TEMPLATE.yaml"
+      expected_outcome: "PROGRESS_TEMPLATE.yaml has a new top-level field `current_agent: ''` with comment explaining valid values (scientist, implementer, verifier, maintainer, or empty for complete)"
+    
+    - step: 2
+      description: "Create `mycelium` CLI script at `scripts/mycelium`"
+      expected_outcome: |
+        Bash script that:
+        - Takes a subcommand `next` and optional mission path argument
+        - Reads progress.yaml from the mission directory
+        - Extracts `current_agent` value using grep/sed or yq if available
+        - If current_agent is empty, prints 'Mission complete' and exits
+        - Constructs prompt: 'Please follow:\n- ai-team/CONTRACT.md\n- ai-team/agents/mission/{agent}.md\n\nINPUTS:\n- Progress Artifact: {progress_path}'
+        - Prints prompt to stdout
+        - Copies prompt to clipboard (pbcopy on macOS, xclip on Linux)
+    
+    - step: 3
+      description: "Update all 4 mission agent files to use `current_agent` field"
+      expected_outcome: |
+        Each agent's 'Self-sequencing' section changes from 'update AGENT_CALL.md' to 'update current_agent field in progress.yaml':
+        - scientist.md: sets current_agent to 'implementer'
+        - implementer.md: sets current_agent to 'verifier'
+        - verifier.md: sets current_agent to 'implementer' (FAIL) or 'maintainer' (PASS)
+        - maintainer.md: sets current_agent to '' (empty, mission complete)
+    
+    - step: 4
+      description: "Update mission_organizer to set initial `current_agent` instead of creating AGENT_CALL.md"
+      expected_outcome: "mission_organizer.md section 5 changes from 'Create AGENT_CALL.md' to 'Set current_agent: scientist in progress.yaml'. Output format updated to show new workflow."
+    
+    - step: 5
+      description: "Delete AGENT_CALL_TEMPLATE.md and update any references"
+      expected_outcome: "AGENT_CALL_TEMPLATE.md is removed. WORKFLOW.md and missions/README.md updated if they reference it."
+  
+  risks_unknowns:
+    - "Portability: clipboard commands differ between macOS (pbcopy) and Linux (xclip/xsel)"
+    - "YAML parsing: pure bash may struggle with edge cases; consider fallback or require yq"
+    - "Existing missions with AGENT_CALL.md files need migration path (out of scope per non-goals)"
+  
+  stop_conditions:
+    - "If user wants cross-platform support beyond macOS, clarify scope"
+    - "If YAML parsing proves too fragile with pure bash, ask about adding yq dependency"
+    - "If current missions must be migrated immediately, clarify scope"
+
+# -------------------------------------------------------------------
+# IMPLEMENTER LOG (appended by Implementer agent, one entry per iteration)
+# -------------------------------------------------------------------
+implementer_log:
+  - iteration: 1
+    changes:
+      - "Added current_agent field to PROGRESS_TEMPLATE.yaml with valid values documentation"
+      - "Created scripts/mycelium CLI that reads progress.yaml, generates agent prompts, and copies to clipboard"
+      - "Updated all 4 mission agents (scientist, implementer, verifier, maintainer) to use current_agent self-sequencing"
+      - "Updated mission_organizer.md to set current_agent instead of creating AGENT_CALL.md"
+      - "Deleted AGENT_CALL_TEMPLATE.md and updated WORKFLOW.md + missions/README.md"
+    files_touched:
+      - "ai-team/missions/PROGRESS_TEMPLATE.yaml (modified)"
+      - "scripts/mycelium (created)"
+      - "ai-team/agents/mission/scientist.md (modified)"
+      - "ai-team/agents/mission/implementer.md (modified)"
+      - "ai-team/agents/mission/verifier.md (modified)"
+      - "ai-team/agents/mission/maintainer.md (modified)"
+      - "ai-team/agents/standalone/mission_organizer.md (modified)"
+      - "ai-team/missions/AGENT_CALL_TEMPLATE.md (deleted)"
+      - "ai-team/WORKFLOW.md (modified)"
+      - "ai-team/missions/README.md (modified)"
+    commands_run:
+      - command: "scripts/mycelium --help"
+        result: "SUCCESS - Shows usage with next subcommand"
+      - command: "scripts/mycelium next ai-team/missions/mycelium-next-cli"
+        result: "SUCCESS - Outputs agent prompt and copies to clipboard"
+      - command: "scripts/mycelium next /tmp/test_progress.yaml (with empty current_agent)"
+        result: "SUCCESS - Shows 'Mission complete' message"
+    outputs_produced:
+      - "scripts/mycelium - executable CLI script"
+    issues_todo:
+      - "None - all plan steps completed"
+
+# -------------------------------------------------------------------
+# VERIFIER REPORT (appended by Verifier agent, one entry per iteration)
+# -------------------------------------------------------------------
+verifier_report:
+  - iteration: 1
+    dod_checks:
+      - item: "PROGRESS_TEMPLATE.yaml contains a `current_agent` field at the top level"
+        status: "PASS"
+        evidence: "Verified lines 7-12: field exists with comment documenting valid values (scientist | implementer | verifier | maintainer | empty)"
+      - item: "`mycelium next` CLI command exists and is executable from repo root"
+        status: "PASS"
+        evidence: "`scripts/mycelium --help` runs successfully, shows usage with next subcommand"
+      - item: "CLI reads `current_agent` from a progress.yaml file and outputs the full agent prompt to stdout"
+        status: "PASS"
+        evidence: "`scripts/mycelium next ai-team/missions/mycelium-next-cli` outputs correct prompt format with CONTRACT.md + agent file + progress path"
+      - item: "CLI copies the generated prompt to system clipboard"
+        status: "PASS"
+        evidence: "`pbpaste` confirmed clipboard contains exact prompt text after running CLI"
+      - item: "All 4 mission agents (scientist, implementer, verifier, maintainer) update `current_agent` field instead of editing AGENT_CALL.md"
+        status: "PASS"
+        evidence: "All 4 agent files have Self-sequencing sections with `current_agent` yaml blocks: scientist→implementer, implementer→verifier, verifier→implementer/maintainer, maintainer→empty"
+      - item: "AGENT_CALL_TEMPLATE.md is deleted"
+        status: "PASS"
+        evidence: "`find_by_name` search returned 0 results for AGENT_CALL_TEMPLATE.md in ai-team/missions/"
+      - item: "mission_organizer sets initial `current_agent` to 'scientist' instead of creating AGENT_CALL.md"
+        status: "PASS"
+        evidence: "mission_organizer.md step 4 says 'set current_agent: scientist' and output format shows 'current_agent: scientist'"
+    commands_rerun:
+      - command: "scripts/mycelium --help"
+        result: "SUCCESS - Shows usage with next subcommand and examples"
+      - command: "scripts/mycelium next ai-team/missions/mycelium-next-cli"
+        result: "SUCCESS - Outputs verifier prompt, copies to clipboard"
+      - command: "pbpaste"
+        result: "SUCCESS - Clipboard contains expected prompt text"
+      - command: "scripts/mycelium next /tmp/empty_agent_test.yaml (with current_agent: '')"
+        result: "SUCCESS - Shows 'Mission complete' message, exits 0"
+      - command: "scripts/mycelium next /tmp/invalid_agent_test.yaml (with invalid agent)"
+        result: "SUCCESS - Rejects with error 'Invalid current_agent value', exits 1"
+      - command: "scripts/mycelium next /tmp/nonexistent_file.yaml"
+        result: "SUCCESS - Rejects with error 'progress.yaml not found', exits 1"
+    required_fixes: []
+    optional_improvements:
+      - "Consider adding a test for the CLI (e.g., a simple test script or integration test)"
+      - "Add version flag (--version) for future CLI maintenance"
+    overall_status: "PASS — ready for Maintainer"
+
+# -------------------------------------------------------------------
+# MAINTAINER NOTES (filled by Maintainer agent)
+# -------------------------------------------------------------------
+maintainer_notes:
+  changes:
+    - "Added `scripts/mycelium` CLI for automated prompt generation"
+    - "Updated `PROGRESS_TEMPLATE.yaml` with `current_agent` field"
+    - "Updated `WORKFLOW.md`, `missions/README.md`, and all agent definitions to use new workflow"
+    - "Deleted `AGENT_CALL_TEMPLATE.md`"
+  behavior_unchanged: true
+  updated_commands: []
+  updated_paths:
+    - original: "ai-team/missions/AGENT_CALL_TEMPLATE.md"
+      updated: "(deleted)"
+
+# -------------------------------------------------------------------
+# MAINTAINER SUMMARY (filled by Maintainer agent)
+# -------------------------------------------------------------------
+maintainer_summary:
+  what_exists:
+    - "`mycelium` CLI tool for automating agent prompting"
+    - "`current_agent` state tracking in `progress.yaml`"
+    - "Fully updated documentation and agent workflows"
+  canonical_command: "scripts/mycelium next ai-team/missions/<mission-id>"
+  expected_outputs:
+    - "stdout: Agent prompt text"
+    - "clipboard: Agent prompt text (copied automatically)"
+  notes:
+    - "Supports macOS (pbcopy) and Linux (xclip/xsel)"
+
+# -------------------------------------------------------------------
+# COMMIT MESSAGE (generated by Maintainer agent)
+# -------------------------------------------------------------------
+commit_message:
+  type: "feat"
+  subject: "add mycelium CLI for generic agent workflow automation"
+  body: |
+    Introduces the `mycelium` CLI tool (`scripts/mycelium`) to replace manual management of `AGENT_CALL.md`.
+    
+    Changes:
+    - Adds `current_agent` field to `PROGRESS_TEMPLATE.yaml` for state tracking
+    - Implements `mycelium next` command to generate and copy agent prompts
+    - Updates all mission agents (scientist, implementer, verifier, maintainer) to self-sequence via `progress.yaml`
+    - Updates WORKFLOW.md and documentation
+    - Removes legacy `AGENT_CALL_TEMPLATE.md`

@@ -5,6 +5,13 @@
 # All agents read from and write to this file.
 
 # -------------------------------------------------------------------
+# CURRENT AGENT (tracks which agent runs next)
+# Valid values: scientist | implementer | verifier | maintainer | "" (empty = complete)
+# Updated by each agent at the end of their run via self-sequencing
+# -------------------------------------------------------------------
+current_agent: ""
+
+# -------------------------------------------------------------------
 # MISSION CONTEXT (filled by Mission Organizer or Scientist)
 # -------------------------------------------------------------------
 mission_context:

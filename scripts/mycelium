@@ -1,0 +1,189 @@
+#!/usr/bin/env bash
+# mycelium - CLI for agent workflow automation
+# Usage: mycelium next [mission-path]
+#
+# Subcommands:
+#   next    Generate and copy the agent prompt for the current mission agent
+
+set -euo pipefail
+
+# Colors for output
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+NC='\033[0m' # No Color
+
+usage() {
+    echo "Usage: mycelium <command> [options]"
+    echo ""
+    echo "Commands:"
+    echo "  next [mission-path]  Generate agent prompt for the next agent"
+    echo "                       mission-path: path to mission folder or progress.yaml"
+    echo "                       (default: auto-detect from current directory)"
+    echo ""
+    echo "Examples:"
+    echo "  mycelium next"
+    echo "  mycelium next ai-team/missions/my-mission"
+    echo "  mycelium next ai-team/missions/my-mission/progress.yaml"
+}
+
+# Extract current_agent from progress.yaml using grep/sed (portable approach)
+extract_current_agent() {
+    local progress_file="$1"
+    
+    # Use grep to find the current_agent line and sed to extract the value
+    # Handles: current_agent: "value", current_agent: 'value', current_agent: value
+    local agent_line
+    agent_line=$(grep -E "^current_agent:" "$progress_file" 2>/dev/null || echo "")
+    
+    if [[ -z "$agent_line" ]]; then
+        echo ""
+        return
+    fi
+    
+    # Extract value after the colon, strip quotes and whitespace
+    local value
+    value=$(echo "$agent_line" | sed 's/^current_agent:[[:space:]]*//' | sed 's/^["'"'"']//' | sed 's/["'"'"']$//' | tr -d '[:space:]')
+    echo "$value"
+}
+
+# Copy to clipboard (cross-platform)
+copy_to_clipboard() {
+    local text="$1"
+    
+    if command -v pbcopy &>/dev/null; then
+        # macOS
+        echo -n "$text" | pbcopy
+        return 0
+    elif command -v xclip &>/dev/null; then
+        # Linux with xclip
+        echo -n "$text" | xclip -selection clipboard
+        return 0
+    elif command -v xsel &>/dev/null; then
+        # Linux with xsel
+        echo -n "$text" | xsel --clipboard --input
+        return 0
+    else
+        return 1
+    fi
+}
+
+# Find the repo root (where ai-team directory exists)
+find_repo_root() {
+    local dir="$PWD"
+    while [[ "$dir" != "/" ]]; do
+        if [[ -d "$dir/ai-team" ]]; then
+            echo "$dir"
+            return 0
+        fi
+        dir=$(dirname "$dir")
+    done
+    return 1
+}
+
+cmd_next() {
+    local mission_path="${1:-}"
+    local progress_file=""
+    local mission_dir=""
+    
+    # Determine progress.yaml location
+    if [[ -n "$mission_path" ]]; then
+        if [[ "$mission_path" == *.yaml ]]; then
+            progress_file="$mission_path"
+            mission_dir=$(dirname "$progress_file")
+        elif [[ -d "$mission_path" ]]; then
+            mission_dir="$mission_path"
+            progress_file="$mission_path/progress.yaml"
+        else
+            echo -e "${RED}Error: Path does not exist: $mission_path${NC}" >&2
+            exit 1
+        fi
+    else
+        # Try to find progress.yaml in current directory or parent mission dirs
+        if [[ -f "progress.yaml" ]]; then
+            progress_file="progress.yaml"
+            mission_dir="."
+        else
+            echo -e "${RED}Error: No mission path provided and no progress.yaml in current directory${NC}" >&2
+            echo "Usage: mycelium next [mission-path]" >&2
+            exit 1
+        fi
+    fi
+    
+    # Verify progress.yaml exists
+    if [[ ! -f "$progress_file" ]]; then
+        echo -e "${RED}Error: progress.yaml not found at: $progress_file${NC}" >&2
+        exit 1
+    fi
+    
+    # Extract current_agent
+    local current_agent
+    current_agent=$(extract_current_agent "$progress_file")
+    
+    # Handle empty (mission complete)
+    if [[ -z "$current_agent" ]]; then
+        echo -e "${GREEN}✅ Mission complete${NC}"
+        echo "No agent to run — current_agent is empty."
+        exit 0
+    fi
+    
+    # Validate agent name
+    case "$current_agent" in
+        scientist|implementer|verifier|maintainer)
+            ;;
+        *)
+            echo -e "${RED}Error: Invalid current_agent value: '$current_agent'${NC}" >&2
+            echo "Valid values: scientist, implementer, verifier, maintainer, or empty" >&2
+            exit 1
+            ;;
+    esac
+    
+    # Construct the prompt
+    local prompt
+    prompt="Please follow:
+- \`ai-team/CONTRACT.md\`
+- \`ai-team/agents/mission/${current_agent}.md\`
+
+INPUTS:
+- Progress Artifact: \`${progress_file}\`"
+    
+    # Print to stdout
+    echo -e "${YELLOW}=== Agent Prompt (${current_agent}) ===${NC}"
+    echo ""
+    echo "$prompt"
+    echo ""
+    
+    # Copy to clipboard
+    if copy_to_clipboard "$prompt"; then
+        echo -e "${GREEN}✅ Copied to clipboard${NC}"
+    else
+        echo -e "${YELLOW}⚠️  Could not copy to clipboard (pbcopy/xclip/xsel not found)${NC}"
+    fi
+}
+
+# Main entry point
+main() {
+    if [[ $# -eq 0 ]]; then
+        usage
+        exit 1
+    fi
+    
+    local command="$1"
+    shift
+    
+    case "$command" in
+        next)
+            cmd_next "$@"
+            ;;
+        -h|--help|help)
+            usage
+            ;;
+        *)
+            echo -e "${RED}Unknown command: $command${NC}" >&2
+            usage
+            exit 1
+            ;;
+    esac
+}
+
+main "$@"

@@ -39,16 +39,15 @@ When all DoD items are PASS, also include:
 
 ## Self-sequencing (MANDATORY)
 
-Before completing, update `AGENT_CALL.md` (in the mission folder) based on status:
+Before completing, update `current_agent` field in the Progress Artifact based on status:
 
 **If FAIL:**
-```diff
-- - `ai-team/agents/mission/verifier.md`
-+ - `ai-team/agents/mission/implementer.md`
+```yaml
+current_agent: "implementer"
 ```
 
 **If PASS:**
-```diff
-- - `ai-team/agents/mission/verifier.md`
-+ - `ai-team/agents/mission/maintainer.md`
+```yaml
+current_agent: "maintainer"
 ```
+

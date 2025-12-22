@@ -50,6 +50,9 @@ Types: `feat`, `fix`, `refactor`, `docs`, `chore`, `test`
 ## Stop condition
 If a refactor might change behavior → STOP and propose as optional follow-up.
 
-## Self-sequencing
-Mission is complete after Maintainer finishes. No further agent call needed.
-Remove or clear `AGENT_CALL.md` to indicate mission complete.
+## Self-sequencing (MANDATORY)
+
+Mission is complete after Maintainer finishes. Set `current_agent` to empty string to indicate completion:
+```yaml
+current_agent: ""
+```
