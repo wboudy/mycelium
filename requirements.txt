@@ -1,0 +1,16 @@
+# Mycelium - AI Agent Workflow Framework
+# Core dependencies for future roadmap features
+
+# YAML parsing (for YAML-based artifacts)
+pyyaml>=6.0
+
+# LangGraph integration (uncomment when ready)
+# langgraph>=0.0.1
+# langchain>=0.1.0
+
+# MCP support (uncomment when ready)
+# mcp>=0.1.0
+
+# Development tools
+ruff>=0.1.0
+pytest>=7.0.0

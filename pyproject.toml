@@ -1,0 +1,39 @@
+[project]
+name = "mycelium"
+version = "0.1.0"
+description = "Multi-agent workflow framework for AI-assisted development"
+readme = "README.md"
+requires-python = ">=3.10"
+license = {text = "MIT"}
+authors = [
+    {name = "Will"}
+]
+keywords = ["ai", "agents", "workflow", "llm"]
+
+dependencies = [
+    "pyyaml>=6.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "ruff>=0.1.0",
+    "pytest>=7.0.0",
+]
+# langgraph = [
+#     "langgraph>=0.0.1",
+#     "langchain>=0.1.0",
+# ]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "W"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
