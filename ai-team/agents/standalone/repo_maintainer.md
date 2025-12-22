@@ -13,7 +13,7 @@ Repo-wide cleanup: identify and remove unnecessary files after reviewing repo st
 ## Before making ANY changes
 
 You MUST thoroughly read:
-1. All completed missions in `ai-team/missions/*/progress.md`
+1. All completed missions in `ai-team/missions/*/progress.yaml` (or `progress.md` for legacy missions)
 
 3. All READMEs in the repo
 4. `ai-team/WORKFLOW.md` and `ai-team/CONTRACT.md`

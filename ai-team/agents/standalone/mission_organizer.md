@@ -20,7 +20,7 @@ You set up new missions. You do NOT plan, implement, or verify.
 
 3. **Create mission folder**: `ai-team/missions/<mission-id>/`
 
-4. **Create `progress.md`**: Copy from `ai-team/missions/PROGRESS_TEMPLATE.md` and fill the Mission Context section at the top. Leave Scientist Plan and all other sections empty.
+4. **Create `progress.yaml`**: Copy from `ai-team/missions/PROGRESS_TEMPLATE.yaml` and fill the `mission_context` section. Leave `scientist_plan` and all other sections with empty/placeholder values.
 
 5. **Create `AGENT_CALL.md`**: Initialize with scientist role:
    ```markdown
@@ -29,7 +29,7 @@ You set up new missions. You do NOT plan, implement, or verify.
    - `ai-team/agents/mission/scientist.md`
 
    INPUTS:
-   - Progress Artifact: `ai-team/missions/<mission-id>/progress.md`
+   - Progress Artifact: `ai-team/missions/<mission-id>/progress.yaml`
    ```
 
 6. **Report** the created paths to the user.
@@ -41,7 +41,7 @@ After setup, display:
 ✅ Mission created: <mission-id>
 
 📁 ai-team/missions/<mission-id>/
-├── progress.md     (Mission Context filled)
+├── progress.yaml   (Mission Context filled)
 └── AGENT_CALL.md   (scientist ready)
 
 To start: "Please follow ai-team/missions/<mission-id>/AGENT_CALL.md"

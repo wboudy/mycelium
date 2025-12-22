@@ -7,7 +7,7 @@ This directory contains **per-mission** folders for the multi-agent workflow.
 Each mission lives in its own subfolder:
 ```
 ai-team/missions/<mission-id>/
-├── progress.md     # Progress Artifact (mission context + implementation log)
+├── progress.yaml   # Progress Artifact (mission context + implementation log)
 ├── AGENT_CALL.md   # Current agent invocation for this mission
 ```
 
@@ -20,8 +20,10 @@ Use a descriptive kebab-case name, e.g.:
 
 ## Lifecycle
 
-1. **Create** a new folder: `ai-team/missions/<mission-id>/`
-2. **Copy** `PROGRESS_TEMPLATE.md` → `<mission-id>/progress.md`
-3. **Copy** `AGENT_CALL_TEMPLATE.md` → `<mission-id>/AGENT_CALL.md`
-4. Agents self-sequence by updating `AGENT_CALL.md` to the next agent
-5. Mission completes when Maintainer signs off
+1. **Use Mission Organizer** (recommended): Automatically sets up folder with `progress.yaml` and `AGENT_CALL.md`
+2. Or manually:
+   - Create folder: `ai-team/missions/<mission-id>/`
+   - Copy `PROGRESS_TEMPLATE.yaml` → `<mission-id>/progress.yaml`
+   - Copy `AGENT_CALL_TEMPLATE.md` → `<mission-id>/AGENT_CALL.md`
+3. Agents self-sequence by updating `AGENT_CALL.md` to the next agent
+4. Mission completes when Maintainer signs off

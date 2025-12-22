@@ -19,11 +19,7 @@ A **human-gated** multi-agent workflow for AI-assisted development. Unlike fully
 - **Research workflows** where reproducibility matters more than speed
 - **Regulated codebases** where you need audit trails
 
-### When to use Cline/Cursor instead
 
-- Fast, interactive prototyping
-- Solo work where speed > auditability
-- Simple, low-risk changes
 
 ---
 
@@ -65,24 +61,12 @@ See [`ai-team/WORKFLOW.md`](ai-team/WORKFLOW.md) for detailed usage.
 
 ---
 
-## Roadmap & Future Ideas
+## Roadmap
 
-### Near-term
-- [ ] **YAML-based artifacts** — Replace markdown with structured YAML for progress artifacts (easier parsing, validation)
-- [ ] **Agent-to-agent calls** — Agents invoke next agent automatically, reducing manual copy-paste of `AGENT_CALL.md`
-- [ ] **Context metrics** — Track token counts, file touches, and decision points per mission
-
-### Medium-term
-- [ ] **LangGraph integration** — Model agent flow as a graph for better orchestration and visualization
-- [ ] **MCP (Model Context Protocol) support** — Expose missions/agents as MCP resources for tool-aware LLMs
-- [ ] **Checkpointing** — Save/restore agent state for long-running missions
-
-### Long-term
-- [ ] **Multi-model orchestration** — Route tasks to different models based on complexity
-- [ ] **Learning from missions** — Aggregate completed missions to improve future planning
-- [ ] **IDE integration** — VS Code extension for mission management
-
----
+See [ROADMAP.md](ROADMAP.md) for detailed development phases:
+- 🟢 **Phase 1: Hardening** — YAML artifacts, automated handoffs, observability
+- 🟡 **Phase 2: Automation** — Agent-to-agent calls, LangGraph, MCP support
+- 🔴 **Phase 3: Intelligence** — Multi-model orchestration, learning, IDE integration
 
 ## Directory Structure
 
@@ -103,7 +87,3 @@ mycelium/
 ├── requirements.txt
 └── README.md               # This file
 ```
-
-## License
-
-MIT

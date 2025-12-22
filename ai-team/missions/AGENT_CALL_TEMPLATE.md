@@ -3,4 +3,4 @@ Please follow:
 - `ai-team/agents/mission/<AGENT>.md`
 
 INPUTS:
-- Progress Artifact: <MISSION_PROGRESS_PATH>
+- Progress Artifact: `ai-team/missions/<mission-id>/progress.yaml`

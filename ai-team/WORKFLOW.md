@@ -32,7 +32,7 @@ Please follow ai-team/agents/standalone/mission_organizer.md with these instruct
 The Mission Organizer will:
 1. Parse your instructions into Mission Context format
 2. Create `ai-team/missions/<mission-id>/` folder
-3. Set up `progress.md` with Mission Context filled
+3. Set up `progress.yaml` with Mission Context filled
 4. Initialize `AGENT_CALL.md` with scientist ready
 
 Then start the mission:
@@ -49,13 +49,13 @@ Please follow ai-team/missions/<mission-id>/AGENT_CALL.md
 - `ai-team/agents/mission/*.md` — mission agent role definitions
 - `ai-team/agents/standalone/*.md` — standalone agent role definitions
 - `ai-team/missions/AGENT_CALL_TEMPLATE.md` — agent invocation template
-- `ai-team/missions/PROGRESS_TEMPLATE.md` — progress artifact structure
+- `ai-team/missions/PROGRESS_TEMPLATE.yaml` — progress artifact structure
 - `ai-team/WORKFLOW.md` — this file
 
 ### Per-mission files
 ```
 ai-team/missions/<mission-id>/
-├── progress.md     # Progress Artifact
+├── progress.yaml   # Progress Artifact (YAML format)
 ├── AGENT_CALL.md   # Current agent call
 ```
 
@@ -69,7 +69,7 @@ Use the Mission Organizer to set up a new mission from natural language:
 Please follow ai-team/agents/standalone/mission_organizer.md with these instructions:
 <your instructions here>
 ```
-The Mission Organizer creates the folder, `progress.md`, and `AGENT_CALL.md` automatically.
+The Mission Organizer creates the folder, `progress.yaml`, and `AGENT_CALL.md` automatically.
 
 ### 2. Call Scientist
 - Paste `ai-team/missions/<mission-id>/AGENT_CALL.md` into agent dashboard
@@ -93,8 +93,9 @@ The Mission Organizer creates the folder, `progress.md`, and `AGENT_CALL.md` aut
 - **Human intervention:** If any agent hits a stop condition (ambiguous requirements, design decision needed, unclear failure), they will ask you. Make the decision, then re-paste `AGENT_CALL.md` to continue.
 
 ### 6. Maintainer
-- Adds cleanup notes and **Maintainer Summary** to `progress.md`
+- Adds cleanup notes and **Maintainer Summary** to `progress.yaml`
 - Generates commit message at the end
+- **Deletes `AGENT_CALL.md`** to signal mission completion
 - Mission is complete after Maintainer finishes
 
 ---
@@ -109,7 +110,7 @@ Each agent updates `AGENT_CALL.md` before completing:
 | Implementer | → Verifier | → Verifier |
 | Verifier (PASS) | → Maintainer | — |
 | Verifier (FAIL) | — | → Implementer |
-| Maintainer | Done | STOP (ask user) |
+| Maintainer | Delete `AGENT_CALL.md` | STOP (ask user) |
 
 **How to update**: Replace the agent line in `AGENT_CALL.md`:
 ```diff
@@ -136,6 +137,19 @@ You can run multiple missions in parallel:
 - Each mission has its own folder in `ai-team/missions/`
 - Each has its own `AGENT_CALL.md`
 - Paste different mission's AGENT_CALL into separate agent tabs
+
+---
+
+## Migration from Markdown to YAML
+
+As of this version, new missions use `progress.yaml` instead of `progress.md`.
+
+**Existing missions** (created before this change):
+- Can continue using `progress.md` — agents will work with either format
+- No automated migration is required
+- Manual migration: copy content to YAML structure if desired
+
+**New missions**: Always use `progress.yaml` via the Mission Organizer.
 
 ---
 

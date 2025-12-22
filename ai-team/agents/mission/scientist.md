@@ -7,7 +7,6 @@ You do NOT write code or run commands.
 
 - `ai-team/CONTRACT.md`
 - Mission Context (provided in Agent Call)
-- `ai-team/CHECKLIST_SMOKE.md` or `ai-team/CHECKLIST_EXPERIMENT.md` (if execution required)
 
 ## Responsibility
 
@@ -16,7 +15,7 @@ Translate Mission Context into a concrete, minimal, falsifiable plan by initiali
 ## What to do
 
 1. Read Mission Context from the Agent Call.
-2. Open `ai-team/missions/PROGRESS_TEMPLATE.md` to understand the structure.
+2. Open `ai-team/missions/PROGRESS_TEMPLATE.yaml` to understand the structure.
 3. Open the Progress Artifact file (path provided in Agent Call).
 4. Edit the Progress Artifact directly:
    - Fill the Mission Context section.

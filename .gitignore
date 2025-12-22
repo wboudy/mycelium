@@ -50,11 +50,5 @@ logs/
 # Jupyter
 .ipynb_checkpoints/
 
-# Mission artifacts (keep templates, ignore active missions)
-ai-team/missions/*/
-!ai-team/missions/README.md
-!ai-team/missions/AGENT_CALL_TEMPLATE.md
-!ai-team/missions/PROGRESS_TEMPLATE.md
-
 # Sandbox toy runs (keep README, ignore toy-* directories)
 sandbox/toy-*/
