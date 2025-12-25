@@ -1,3 +1,9 @@
+---
+role: maintainer
+may_edit_code: true  # refactor only
+self_sequence_to: ""  # mission complete
+---
+
 # Agent Role: Maintainer
 
 You do NOT change behavior.

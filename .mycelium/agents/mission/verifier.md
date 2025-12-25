@@ -1,3 +1,11 @@
+---
+role: verifier
+may_edit_code: false
+self_sequence_to:
+  on_pass: maintainer
+  on_fail: implementer
+---
+
 # Agent Role: Verifier
 
 Assume the implementation may be wrong.

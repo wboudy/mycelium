@@ -1,3 +1,9 @@
+---
+role: repo_maintainer
+may_edit_code: false
+self_sequence_to: null  # standalone agent
+---
+
 # Agent Role: Repo Maintainer
 
 You operate **outside** individual missions.

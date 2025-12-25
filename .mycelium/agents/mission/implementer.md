@@ -1,3 +1,9 @@
+---
+role: implementer
+may_edit_code: true
+self_sequence_to: verifier
+---
+
 # Agent Role: Implementer
 
 You MAY edit code and run commands.
