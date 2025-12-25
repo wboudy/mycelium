@@ -275,20 +275,25 @@ cmd_status() {
     local current_agent
     current_agent=$(extract_current_agent "$progress_file")
     
-    # Count DoD items
+    # Count DoD items from scientist_plan definition_of_done
     local dod_total=0
     local dod_done=0
-    while IFS= read -r line; do
-        if [[ "$line" =~ status:[[:space:]]*\"?pending\"? ]]; then
-            ((dod_total++)) || true
-        elif [[ "$line" =~ status:[[:space:]]*\"?done\"? ]]; then
-            ((dod_total++)) || true
-            ((dod_done++)) || true
-        elif [[ "$line" =~ status:[[:space:]]*\"?PASS\"? ]]; then
-            ((dod_total++)) || true
-            ((dod_done++)) || true
+    
+    # Count total DoD items from scientist_plan (lines with "- description:")
+    dod_total=$(sed -n '/^  definition_of_done:/,/^  [a-z_]*:/p' "$progress_file" 2>/dev/null | grep -c "description:" || echo "0")
+    
+    # Check if mission is complete (verifier passed) - if overall_status contains PASS, all items are done
+    if grep -q 'overall_status:.*PASS' "$progress_file" 2>/dev/null; then
+        dod_done=$dod_total
+    else
+        # Count individual PASS items from verifier dod_checks if available
+        # Extract just the verifier_report section and count PASS statuses
+        local verifier_section
+        verifier_section=$(sed -n '/^verifier_report:/,/^[a-z_]*:/p' "$progress_file" 2>/dev/null)
+        if [[ -n "$verifier_section" ]]; then
+            dod_done=$(echo "$verifier_section" | grep -c 'status:.*"PASS"' || echo "0")
         fi
-    done < <(grep -A1 "description:" "$progress_file" 2>/dev/null | grep "status:" || true)
+    fi
     
     # Get objective
     local objective
