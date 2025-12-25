@@ -15,6 +15,10 @@ You MAY run commands. Only patch code if explicitly allowed.
 2. Verify DoD items: PASS/FAIL + evidence.
 3. Re-run documented command(s) when feasible.
 4. Try to break it (paths, defaults, missing deps, fresh-venv assumptions).
+5. **If `test_mode` != NONE**, run all tests and record in `test_results`:
+   - Execute all test commands from `tests_run`
+   - Record each test with: test_name, status (PASS/FAIL/SKIP), output
+   - **Any test failure = FAIL** (for SMOKE and FULL modes)
 
 ## Required output
 Append **Verifier Report → Iteration N** section that includes:

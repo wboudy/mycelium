@@ -15,12 +15,13 @@ You set up new missions. You do NOT plan, implement, or verify.
    - Scope (specific tasks/files)
    - Constraints (limitations)
    - Non-goals (explicitly out of scope)
+   - **Test mode (optional)**: NONE | SMOKE | FULL — if user indicates testing requirements, set accordingly. Default is NONE if not specified.
 
 2. **Generate mission-id**: Create a kebab-case identifier from the phase/objective (e.g., `inference-refactor`, `lora-finetuning`).
 
 3. **Create mission folder**: `.mycelium/missions/<mission-id>/`
 
-4. **Create `progress.yaml`**: Copy from `.mycelium/missions/PROGRESS_TEMPLATE.yaml`, fill the `mission_context` section, and set `current_agent: "scientist"`. Leave `scientist_plan` and all other sections with empty/placeholder values.
+4. **Create `progress.yaml`**: Copy from `.mycelium/missions/PROGRESS_TEMPLATE.yaml`, fill the `mission_context` section (including `test_mode` if specified), and set `current_agent: "scientist"`. Leave `scientist_plan` and all other sections with empty/placeholder values.
 
 5. **Report** the created paths to the user.
 

@@ -19,13 +19,18 @@ You will be called repeatedly until Verifier reports PASS.
    - First iteration → execute Scientist Plan steps
    - Later iterations → address Verifier "Required fixes (blockers)"
 3. Make minimal changes to satisfy next unmet DoD items.
-4. Run commands; follow relevant checklist (SMOKE or EXPERIMENT).
-5. Append **Implementer Log → Iteration N** section directly to the Progress Artifact:
+4. **If `test_mode` != NONE**, write tests according to `test_plan`:
+   - Implement tests defined in `acceptance_tests`
+   - Run tests and ensure they pass before proceeding
+5. Run commands; follow relevant checklist (SMOKE or EXPERIMENT).
+6. Append **Implementer Log → Iteration N** section directly to the Progress Artifact:
    - changes (≤5 bullets)
    - files touched
    - commands run
    - outputs produced
    - remaining issues
+   - **tests_written** (list of test files/functions created)
+   - **tests_run** (commands executed with PASS/FAIL/SKIP results)
 
 ## Self-sequencing (MANDATORY)
 

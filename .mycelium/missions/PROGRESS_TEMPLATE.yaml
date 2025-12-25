@@ -33,6 +33,13 @@ mission_context:
   # What is explicitly out of scope for this mission
   non_goals:
     - ""
+  
+  # Testing mode - determines testing requirements for this mission
+  # Valid values: NONE | SMOKE | FULL
+  # NONE: No tests required (exploratory/throwaway missions)
+  # SMOKE: Basic sanity tests (features that should work reliably)
+  # FULL: Comprehensive tests (production-ready/persistent code)
+  test_mode: "NONE"
 
 # -------------------------------------------------------------------
 # SCIENTIST PLAN (filled by Scientist agent)
@@ -65,6 +72,15 @@ scientist_plan:
   # Conditions that should cause the agent to stop and ask the user
   stop_conditions:
     - ""
+  
+  # Test plan (filled when test_mode != NONE)
+  test_plan:
+    # Overall testing strategy/approach
+    test_strategy: ""
+    # Specific acceptance tests to implement
+    acceptance_tests:
+      - description: ""
+        type: ""  # unit | integration | e2e | manual
 
 # -------------------------------------------------------------------
 # IMPLEMENTER LOG (appended by Implementer agent, one entry per iteration)
@@ -87,6 +103,13 @@ implementer_log:
     # Remaining issues or TODO items
     issues_todo:
       - ""
+    # Tests written (when test_mode != NONE)
+    tests_written:
+      - ""
+    # Tests executed with results
+    tests_run:
+      - command: ""
+        result: ""  # PASS | FAIL | SKIP
 
 # -------------------------------------------------------------------
 # VERIFIER REPORT (appended by Verifier agent, one entry per iteration)
@@ -108,6 +131,11 @@ verifier_report:
     # Suggestions that are nice-to-have but not blocking
     optional_improvements:
       - ""
+    # Test results (when test_mode != NONE)
+    test_results:
+      - test_name: ""
+        status: ""  # PASS | FAIL | SKIP
+        output: ""
     # MANDATORY: exactly one of these values
     # "FAIL — rerun Implementer" or "PASS — ready for Maintainer"
     overall_status: ""

@@ -22,7 +22,13 @@ Translate Mission Context into a concrete, minimal, falsifiable plan by filling 
      - Checklist mode: None | SMOKE | EXPERIMENT
      - Risks / unknowns
      - Stop conditions
-4. Save the file.
+4. **If `test_mode` != NONE**, fill the `test_plan` subsection:
+     - `test_strategy`: Overall testing approach
+     - `acceptance_tests`: Specific tests to implement (with type: unit/integration/e2e/manual)
+5. **Consider upgrading `test_mode`** if the mission involves persistent/production code:
+     - SMOKE for features that should work reliably
+     - FULL for critical infrastructure or production-ready code
+6. Save the file.
 
 The Progress Artifact is the single source of truth.
 

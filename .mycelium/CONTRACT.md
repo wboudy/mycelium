@@ -57,6 +57,23 @@ Phases: [Define your project phases here]
   - add them to `requirements.txt`
   - note the change in the Progress Artifact
 
+## Testing
+
+Testing is integrated into the agent workflow. The `test_mode` field in `mission_context` determines requirements:
+
+| Mode | When to Use | Requirements |
+|------|-------------|--------------|
+| **NONE** | Exploratory, throwaway, or documentation-only missions | No tests required |
+| **SMOKE** | Features that should work reliably; default for most feature work | Basic sanity tests that verify core functionality |
+| **FULL** | Production-ready, persistent code; critical infrastructure | Comprehensive tests with edge cases and error handling |
+
+**Guidelines:**
+- Default is `NONE` — the Scientist explicitly upgrades based on mission persistence
+- Tests complement DoD verification; they don't replace it
+- Specify WHAT to test, not HOW (framework choice is project-specific)
+- Verifier runs all tests; any failure = mission FAIL (for SMOKE/FULL modes)
+
+
 
 ## Stop Conditions (all agents)
 
