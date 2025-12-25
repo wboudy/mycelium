@@ -1,10 +1,10 @@
 # Multi-Agent Development Workflow
 
-This repo uses a 4-agent workflow coordinated through the `ai-team/` directory.
+This repo uses a 4-agent workflow coordinated through the `.mycelium/` directory.
 
 ## Agents
 
-### Mission Agents (`ai-team/agents/mission/`)
+### Mission Agents (`.mycelium/agents/mission/`)
 | Agent | Role | May edit code? |
 |-------|------|----------------|
 | Scientist | Translates mission → plan | No |
@@ -12,7 +12,7 @@ This repo uses a 4-agent workflow coordinated through the `ai-team/` directory.
 | Verifier | Validates DoD, finds bugs | Run only |
 | Maintainer | Cleanup, commit message | Refactor only |
 
-### Standalone Agents (`ai-team/agents/standalone/`)
+### Standalone Agents (`.mycelium/agents/standalone/`)
 | Agent | Role | May edit code? |
 |-------|------|----------------|
 | Mission Organizer | Parses instructions → sets up mission | No |
@@ -25,18 +25,18 @@ This repo uses a 4-agent workflow coordinated through the `ai-team/` directory.
 The fastest way to start a new mission:
 
 ```
-Please follow ai-team/agents/standalone/mission_organizer.md with these instructions:
+Please follow .mycelium/agents/standalone/mission_organizer.md with these instructions:
 <your natural language instructions here>
 ```
 
 The Mission Organizer will:
 1. Parse your instructions into Mission Context format
-2. Create `ai-team/missions/<mission-id>/` folder
+2. Create `.mycelium/missions/<mission-id>/` folder
 3. Set up `progress.yaml` with Mission Context filled and `current_agent: scientist`
 
 Then start the mission using the CLI:
 ```bash
-scripts/mycelium next ai-team/missions/<mission-id>
+.mycelium/bin/mycelium next .mycelium/missions/<mission-id>
 ```
 
 This generates the agent prompt and copies it to your clipboard.
@@ -46,16 +46,16 @@ This generates the agent prompt and copies it to your clipboard.
 ## System Files
 
 ### Stable files (rarely change)
-- `ai-team/CONTRACT.md` — global rules, decisions, stop conditions, scale guidelines
-- `ai-team/agents/mission/*.md` — mission agent role definitions
-- `ai-team/agents/standalone/*.md` — standalone agent role definitions
-- `ai-team/missions/PROGRESS_TEMPLATE.yaml` — progress artifact structure
-- `ai-team/WORKFLOW.md` — this file
-- `scripts/mycelium` — CLI for agent prompt generation
+- `.mycelium/CONTRACT.md` — global rules, decisions, stop conditions, scale guidelines
+- `.mycelium/agents/mission/*.md` — mission agent role definitions
+- `.mycelium/agents/standalone/*.md` — standalone agent role definitions
+- `.mycelium/missions/PROGRESS_TEMPLATE.yaml` — progress artifact structure
+- `.mycelium/WORKFLOW.md` — this file
+- `.mycelium/bin/mycelium` — CLI for agent prompt generation
 
 ### Per-mission files
 ```
-ai-team/missions/<mission-id>/
+.mycelium/missions/<mission-id>/
 └── progress.yaml   # Progress Artifact (YAML format, includes current_agent)
 ```
 
@@ -66,14 +66,14 @@ ai-team/missions/<mission-id>/
 ### 1. Create mission (Mission Organizer)
 Use the Mission Organizer to set up a new mission from natural language:
 ```
-Please follow ai-team/agents/standalone/mission_organizer.md with these instructions:
+Please follow .mycelium/agents/standalone/mission_organizer.md with these instructions:
 <your instructions here>
 ```
 The Mission Organizer creates the folder and `progress.yaml` with `current_agent: scientist`.
 
 ### 2. Call Scientist
 ```bash
-scripts/mycelium next ai-team/missions/<mission-id>
+.mycelium/bin/mycelium next .mycelium/missions/<mission-id>
 ```
 - Paste the generated prompt into agent dashboard
 - Scientist fills: DoD, Plan, Checklist mode
@@ -82,7 +82,7 @@ scripts/mycelium next ai-team/missions/<mission-id>
 
 ### 3. Call Implementer
 ```bash
-scripts/mycelium next ai-team/missions/<mission-id>
+.mycelium/bin/mycelium next .mycelium/missions/<mission-id>
 ```
 - Paste the generated prompt into agent dashboard
 - Implementer executes plan, logs iteration
@@ -90,7 +90,7 @@ scripts/mycelium next ai-team/missions/<mission-id>
 
 ### 4. Call Verifier
 ```bash
-scripts/mycelium next ai-team/missions/<mission-id>
+.mycelium/bin/mycelium next .mycelium/missions/<mission-id>
 ```
 - Paste the generated prompt into agent dashboard
 - Verifier checks DoD, reports PASS/FAIL
@@ -98,7 +98,7 @@ scripts/mycelium next ai-team/missions/<mission-id>
 - If PASS: updates `current_agent` → maintainer (automatic)
 
 ### 5. Iterate until PASS
-- Keep running `scripts/mycelium next` — sequencing is automatic via `current_agent` field
+- Keep running `.mycelium/bin/mycelium next` — sequencing is automatic via `current_agent` field
 - **Human intervention:** If any agent hits a stop condition (ambiguous requirements, design decision needed, unclear failure), they will ask you. Make the decision, then re-run the CLI to continue.
 
 ### 6. Maintainer
@@ -135,16 +135,16 @@ A separate `repo_maintainer` agent operates **outside** individual missions:
 - Identifies unnecessary files safe to delete
 - Reports findings in chat 
 
-See `ai-team/agents/standalone/repo_maintainer.md` for details.
+See `.mycelium/agents/standalone/repo_maintainer.md` for details.
 
 ---
 
 ## Multiple Concurrent Missions
 
 You can run multiple missions in parallel:
-- Each mission has its own folder in `ai-team/missions/`
+- Each mission has its own folder in `.mycelium/missions/`
 - Each has its own `progress.yaml` with its own `current_agent`
-- Run `scripts/mycelium next` with different mission paths
+- Run `.mycelium/bin/mycelium next` with different mission paths
 
 ---
 

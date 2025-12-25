@@ -6,7 +6,7 @@ This directory contains **per-mission** folders for the multi-agent workflow.
 
 Each mission lives in its own subfolder:
 ```
-ai-team/missions/<mission-id>/
+.mycelium/missions/<mission-id>/
 └── progress.yaml   # Progress Artifact (mission context + current_agent + logs)
 ```
 
@@ -21,10 +21,10 @@ Use a descriptive kebab-case name, e.g.:
 
 1. **Use Mission Organizer** (recommended): Automatically sets up folder with `progress.yaml` and `current_agent: scientist`
 2. Or manually:
-   - Create folder: `ai-team/missions/<mission-id>/`
+   - Create folder: `.mycelium/missions/<mission-id>/`
    - Copy `PROGRESS_TEMPLATE.yaml` → `<mission-id>/progress.yaml`
    - Set `current_agent: "scientist"` in progress.yaml
-3. Run `scripts/mycelium next ai-team/missions/<mission-id>` to get the agent prompt
+3. Run `.mycelium/bin/mycelium next .mycelium/missions/<mission-id>` to get the agent prompt
 4. Agents self-sequence by updating `current_agent` field to the next agent
 5. Mission completes when Maintainer sets `current_agent` to empty string
 

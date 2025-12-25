@@ -42,7 +42,7 @@ A gatekeeper that rejects malformed missions before work begins.
 
 **Example:**
 ```bash
-$ mycelium validate ai-team/missions/my-mission/progress.yaml
+$ mycelium validate .mycelium/missions/my-mission/progress.yaml
 ❌ Missing required field: definition_of_done
    → Mission rejected. Scientist must complete DoD.
 ```
@@ -182,7 +182,7 @@ Route agents to appropriate models based on task complexity.
 A background crawler that converts completed missions into a **local RAG knowledge base**.
 
 **Responsibilities:**
-- Crawl completed `ai-team/missions/` folders
+- Crawl completed `.mycelium/missions/` folders
 - Extract patterns, failures, and lessons learned
 - Advise Scientist: *"In Mission #42, we tried library X — it had memory leaks on the grid"*
 - Automatically warn about previously attempted (and failed) approaches

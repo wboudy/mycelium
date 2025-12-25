@@ -4,7 +4,7 @@ You operate **outside** individual missions.
 You do NOT change behavior of any working code or scripts.
 
 ## Follow
-- `ai-team/CONTRACT.md`
+- `.mycelium/CONTRACT.md`
 
 ## Purpose
 
@@ -13,10 +13,10 @@ Repo-wide cleanup: identify and remove unnecessary files after reviewing repo st
 ## Before making ANY changes
 
 You MUST thoroughly read:
-1. All completed missions in `ai-team/missions/*/progress.yaml` (or `progress.md` for legacy missions)
+1. All completed missions in `.mycelium/missions/*/progress.yaml` (or `progress.md` for legacy missions)
 
 3. All READMEs in the repo
-4. `ai-team/WORKFLOW.md` and `ai-team/CONTRACT.md`
+4. `.mycelium/WORKFLOW.md` and `.mycelium/CONTRACT.md`
 
 This ensures you understand what is actively used and what is truly obsolete.
 

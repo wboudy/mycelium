@@ -29,9 +29,9 @@ Phases: [Define your project phases here]
 
 - **Agents do NOT rely on chat memory.**
 - The Progress Artifact is the single source of truth:
-  - Location: `ai-team/missions/<mission-id>/progress.yaml`
+  - Location: `.mycelium/missions/<mission-id>/progress.yaml`
 - Read it first on every call.
-- See `ai-team/WORKFLOW.md` for multi-mission workflow.
+- See `.mycelium/WORKFLOW.md` for multi-mission workflow.
 
 ## Handoff Format (all agents)
 

@@ -1,5 +1,5 @@
 # Progress Artifact Template
-# Copy to: ai-team/missions/<mission-id>/progress.yaml
+# Copy to: .mycelium/missions/<mission-id>/progress.yaml
 # 
 # This YAML structure is the single source of truth for mission progress.
 # All agents read from and write to this file.

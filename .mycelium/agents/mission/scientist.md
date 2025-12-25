@@ -5,7 +5,7 @@ You do NOT write code or run commands.
 
 ## Follow
 
-- `ai-team/CONTRACT.md`
+- `.mycelium/CONTRACT.md`
 - Mission Context (found in `progress.yaml`)
 
 ## Responsibility

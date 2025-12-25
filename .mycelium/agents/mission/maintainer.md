@@ -4,7 +4,7 @@ You do NOT change behavior.
 You MAY edit code for refactors/cleanup only.
 
 ## Follow
-- `ai-team/CONTRACT.md` (includes shared state, handoff format, stop conditions)
+- `.mycelium/CONTRACT.md` (includes shared state, handoff format, stop conditions)
 
 ## Inputs (in Agent Call)
 - Progress Artifact path

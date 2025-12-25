@@ -4,7 +4,7 @@ Assume the implementation may be wrong.
 You MAY run commands. Only patch code if explicitly allowed.
 
 ## Follow
-- `ai-team/CONTRACT.md` (includes shared state, handoff format, stop conditions)
+- `.mycelium/CONTRACT.md` (includes shared state, handoff format, stop conditions)
 - Checklist mode from Progress Artifact (None | SMOKE | EXPERIMENT)
 
 ## Inputs (in Agent Call)

@@ -23,11 +23,11 @@
   - Automated agent handoffs
 
 ## Scientist Plan
-- **Progress Artifact Path:** `ai-team/missions/progress-yaml-migration/progress.md`
+- **Progress Artifact Path:** `.mycelium/missions/progress-yaml-migration/progress.md`
 - **Checklist Mode:** None
 
 ### Definition of Done (DoD)
-- [ ] `PROGRESS_TEMPLATE.yaml` exists in `ai-team/missions/` with all fields from `.md` template preserved
+- [ ] `PROGRESS_TEMPLATE.yaml` exists in `.mycelium/missions/` with all fields from `.md` template preserved
 - [ ] YAML schema is self-documenting (comments explain field purposes and valid values)
 - [ ] `mission_organizer.md` updated to create `progress.yaml` instead of `progress.md`
 - [ ] All mission agent files (`scientist.md`, `implementer.md`, `verifier.md`, `maintainer.md`) updated to reference `.yaml`
@@ -37,32 +37,32 @@
 - [ ] Migration guidance documented for existing missions (in this progress artifact or WORKFLOW.md)
 
 ### Plan (steps)
-1) Create `ai-team/missions/PROGRESS_TEMPLATE.yaml`:
+1) Create `.mycelium/missions/PROGRESS_TEMPLATE.yaml`:
    - Convert all Markdown sections to YAML structure
    - Use nested keys for hierarchical data (e.g., `scientist_plan.definition_of_done`)
    - Add YAML comments (`#`) explaining each field
    - Use arrays for list items, strings for free-form text
    - Preserve the log/iteration structure for implementer and verifier
 
-2) Update `ai-team/agents/standalone/mission_organizer.md`:
+2) Update `.mycelium/agents/standalone/mission_organizer.md`:
    - Change template copy from `.md` to `.yaml`
    - Update any references to file format/parsing
 
-3) Update mission agents in `ai-team/agents/mission/`:
+3) Update mission agents in `.mycelium/agents/mission/`:
    - `scientist.md`: Reference `PROGRESS_TEMPLATE.yaml`, edit `.yaml` file
    - `implementer.md`: Reference `.yaml` progress artifact
    - `verifier.md`: Reference `.yaml` progress artifact
    - `maintainer.md`: Reference `.yaml` progress artifact
 
-4) Update `ai-team/CONTRACT.md`:
+4) Update `.mycelium/CONTRACT.md`:
    - Change `progress.md` → `progress.yaml` in Shared State section
 
-5) Update `ai-team/WORKFLOW.md`:
+5) Update `.mycelium/WORKFLOW.md`:
    - Update all references from `.md` to `.yaml`
    - Update per-mission files section
    - Update Quick Start section
 
-6) Update `ai-team/missions/AGENT_CALL_TEMPLATE.md`:
+6) Update `.mycelium/missions/AGENT_CALL_TEMPLATE.md`:
    - Change Progress Artifact reference to `.yaml`
 
 7) Document migration path:
@@ -91,20 +91,20 @@
 - Added "Migration from Markdown to YAML" section to `WORKFLOW.md`
 
 #### Files touched
-- `ai-team/missions/PROGRESS_TEMPLATE.yaml` (NEW)
-- `ai-team/missions/PROGRESS_TEMPLATE.md` (DELETED)
-- `ai-team/agents/standalone/mission_organizer.md` (MODIFIED)
-- `ai-team/agents/mission/scientist.md` (MODIFIED)
-- `ai-team/CONTRACT.md` (MODIFIED)
-- `ai-team/WORKFLOW.md` (MODIFIED)
-- `ai-team/missions/AGENT_CALL_TEMPLATE.md` (MODIFIED)
+- `.mycelium/missions/PROGRESS_TEMPLATE.yaml` (NEW)
+- `.mycelium/missions/PROGRESS_TEMPLATE.md` (DELETED)
+- `.mycelium/agents/standalone/mission_organizer.md` (MODIFIED)
+- `.mycelium/agents/mission/scientist.md` (MODIFIED)
+- `.mycelium/CONTRACT.md` (MODIFIED)
+- `.mycelium/WORKFLOW.md` (MODIFIED)
+- `.mycelium/missions/AGENT_CALL_TEMPLATE.md` (MODIFIED)
 
 #### Commands run
-- Command: `rm /Users/will/Desktop/mycelium/ai-team/missions/PROGRESS_TEMPLATE.md`
+- Command: `rm /Users/will/Desktop/mycelium/.mycelium/missions/PROGRESS_TEMPLATE.md`
 - Result: Success, old template deleted
 
 #### Outputs produced
-- `ai-team/missions/PROGRESS_TEMPLATE.yaml`
+- `.mycelium/missions/PROGRESS_TEMPLATE.yaml`
 
 #### Issues / TODO
 - None identified. All 8 plan steps completed.
@@ -116,7 +116,7 @@
 ## Verifier Report
 ### Iteration 1
 #### DoD checks (PASS/FAIL + evidence)
-- `PROGRESS_TEMPLATE.yaml` exists: **PASS** — File exists at `ai-team/missions/PROGRESS_TEMPLATE.yaml` (150 lines)
+- `PROGRESS_TEMPLATE.yaml` exists: **PASS** — File exists at `.mycelium/missions/PROGRESS_TEMPLATE.yaml` (150 lines)
 - YAML schema is self-documenting: **PASS** — File contains extensive `#` comments explaining field purposes, valid values (e.g., "Valid values: None | SMOKE | EXPERIMENT"), and structure
 - `mission_organizer.md` updated: **PASS** — Line 23-24 references `PROGRESS_TEMPLATE.yaml` and creates `progress.yaml`
 - All mission agent files updated: **PASS** — `scientist.md` explicitly references `PROGRESS_TEMPLATE.yaml` (line 19); other agents reference "Progress Artifact path" which is acceptable since path comes from AGENT_CALL
@@ -124,10 +124,10 @@
 - `WORKFLOW.md` updated: **PASS** — Multiple `.yaml` references throughout (lines 35, 52, 58, 72, 96) plus migration section
 - `AGENT_CALL_TEMPLATE.md` updated: **PASS** — Line 6 references `progress.yaml`
 - Migration guidance documented: **PASS** — WORKFLOW.md lines 143-152 contain complete migration guidance for existing missions
-- Old `PROGRESS_TEMPLATE.md` deleted: **PASS** — File not found in `ai-team/missions/`
+- Old `PROGRESS_TEMPLATE.md` deleted: **PASS** — File not found in `.mycelium/missions/`
 
 #### Commands re-run
-- Command: `find ai-team/missions -name "PROGRESS_TEMPLATE.md"`
+- Command: `find .mycelium/missions -name "PROGRESS_TEMPLATE.md"`
 - Result: No results (confirmed deletion)
 
 #### Required fixes (blockers)
@@ -142,14 +142,14 @@
 **Canonical command:** N/A (documentation-only mission, no runtime commands)
 
 **Expected outputs:**
-- `ai-team/missions/PROGRESS_TEMPLATE.yaml` — new YAML template
+- `.mycelium/missions/PROGRESS_TEMPLATE.yaml` — new YAML template
 - Updated agent files with `.yaml` references
 - Migration guidance in `WORKFLOW.md`
 
 ## Maintainer Notes
 ### Changes
-- Updated `ai-team/missions/README.md` to reference `progress.yaml` instead of `progress.md`
-- Updated `ai-team/agents/standalone/repo_maintainer.md` to reference both `.yaml` and legacy `.md` formats
+- Updated `.mycelium/missions/README.md` to reference `progress.yaml` instead of `progress.md`
+- Updated `.mycelium/agents/standalone/repo_maintainer.md` to reference both `.yaml` and legacy `.md` formats
 - Removed stale reference to non-existent `CHECKLIST_SMOKE.md` and `CHECKLIST_EXPERIMENT.md` from `scientist.md`
 
 ### Behavior unchanged confirmation
@@ -169,7 +169,7 @@
 
 **How to use:**
 ```
-Please follow ai-team/agents/standalone/mission_organizer.md with these instructions:
+Please follow .mycelium/agents/standalone/mission_organizer.md with these instructions:
 <your instructions here>
 ```
 

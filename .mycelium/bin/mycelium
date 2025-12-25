@@ -22,9 +22,9 @@ usage() {
     echo "                       (default: auto-detect from current directory)"
     echo ""
     echo "Examples:"
-    echo "  mycelium next"
-    echo "  mycelium next ai-team/missions/my-mission"
-    echo "  mycelium next ai-team/missions/my-mission/progress.yaml"
+    echo "  .mycelium/bin/mycelium next"
+    echo "  .mycelium/bin/mycelium next ai-team/missions/my-mission"
+    echo "  .mycelium/bin/mycelium next ai-team/missions/my-mission/progress.yaml"
 }
 
 # Extract current_agent from progress.yaml using grep/sed (portable approach)
@@ -68,11 +68,11 @@ copy_to_clipboard() {
     fi
 }
 
-# Find the repo root (where ai-team directory exists)
+# Find the repo root (where .mycelium directory exists)
 find_repo_root() {
     local dir="$PWD"
     while [[ "$dir" != "/" ]]; do
-        if [[ -d "$dir/ai-team" ]]; then
+        if [[ -d "$dir/.mycelium" ]]; then
             echo "$dir"
             return 0
         fi

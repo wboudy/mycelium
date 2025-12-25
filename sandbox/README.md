@@ -1,6 +1,6 @@
 # Sandbox
 
-This directory is for **toy runs** — experimental missions to test and iterate on the `ai-team` workflow.
+This directory is for **toy runs** — experimental missions to test and iterate on the `.mycelium` workflow.
 
 ## Convention
 
@@ -20,7 +20,7 @@ All `toy-*` directories are **gitignored** and will not be committed.
 
 1. Create: `mkdir sandbox/toy-<name>`
 2. Run agents from repo root, pointing to toy run for artifacts
-3. The `ai-team/` folder stays in place — toy runs hold only outputs
+3. The `.mycelium/` folder stays in place — toy runs hold only outputs
 4. Delete or keep for local reference
 
 ---
@@ -37,7 +37,7 @@ Each toy run includes the exact prompt to give Mission Organizer.
 **Goal:** Verify basic Scientist → Implementer → Verifier flow completes.
 
 ```
-Please follow ai-team/agents/standalone/mission_organizer.md with these instructions:
+Please follow .mycelium/agents/standalone/mission_organizer.md with these instructions:
 
 Create a Python script at sandbox/toy-simple-script/hello.py that:
 - Takes a name as a CLI argument
@@ -51,7 +51,7 @@ Scope: Only modify files in sandbox/toy-simple-script/
 **Goal:** Test that Verifier catches a bug and loops back to Implementer.
 
 ```
-Please follow ai-team/agents/standalone/mission_organizer.md with these instructions:
+Please follow .mycelium/agents/standalone/mission_organizer.md with these instructions:
 
 Create a Python script at sandbox/toy-failing-verifier/divide.py that:
 - Takes two numbers as CLI arguments
@@ -68,7 +68,7 @@ Scope: Only modify files in sandbox/toy-failing-verifier/
 **Goal:** Test that agents stop and ask user when requirements are ambiguous.
 
 ```
-Please follow ai-team/agents/standalone/mission_organizer.md with these instructions:
+Please follow .mycelium/agents/standalone/mission_organizer.md with these instructions:
 
 Build a "data processor" in sandbox/toy-stop-condition/.
 
@@ -85,7 +85,7 @@ Scope: Only modify files in sandbox/toy-stop-condition/
 **Goal:** Implementer writes tests, Verifier runs them.
 
 ```
-Please follow ai-team/agents/standalone/mission_organizer.md with these instructions:
+Please follow .mycelium/agents/standalone/mission_organizer.md with these instructions:
 
 Create a utility module at sandbox/toy-pytest-flow/utils.py with:
 - add(a, b) → returns sum
@@ -103,7 +103,7 @@ Scope: Only modify files in sandbox/toy-pytest-flow/
 **Goal:** Verifier catches a failing test, triggers Implementer loop.
 
 ```
-Please follow ai-team/agents/standalone/mission_organizer.md with these instructions:
+Please follow .mycelium/agents/standalone/mission_organizer.md with these instructions:
 
 Create sandbox/toy-test-failure/calculator.py with:
 - subtract(a, b) → returns difference
@@ -122,7 +122,7 @@ Scope: Only modify files in sandbox/toy-test-failure/
 **Goal:** Test using YAML for progress artifacts instead of markdown.
 
 ```
-Please follow ai-team/agents/standalone/mission_organizer.md with these instructions:
+Please follow .mycelium/agents/standalone/mission_organizer.md with these instructions:
 
 Create a simple config loader at sandbox/toy-yaml-progress/config.py that:
 - Reads a YAML config file

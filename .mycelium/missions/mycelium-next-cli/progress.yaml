@@ -1,5 +1,5 @@
 # Progress Artifact — mycelium-next-cli
-# Copy to: ai-team/missions/<mission-id>/progress.yaml
+# Copy to: .mycelium/missions/<mission-id>/progress.yaml
 # 
 # This YAML structure is the single source of truth for mission progress.
 # All agents read from and write to this file.
@@ -41,7 +41,7 @@ mission_context:
 # SCIENTIST PLAN (filled by Scientist agent)
 # -------------------------------------------------------------------
 scientist_plan:
-  progress_artifact_path: "ai-team/missions/mycelium-next-cli/progress.yaml"
+  progress_artifact_path: ".mycelium/missions/mycelium-next-cli/progress.yaml"
   
   checklist_mode: "SMOKE"
   
@@ -74,7 +74,7 @@ scientist_plan:
         - Reads progress.yaml from the mission directory
         - Extracts `current_agent` value using grep/sed or yq if available
         - If current_agent is empty, prints 'Mission complete' and exits
-        - Constructs prompt: 'Please follow:\n- ai-team/CONTRACT.md\n- ai-team/agents/mission/{agent}.md\n\nINPUTS:\n- Progress Artifact: {progress_path}'
+        - Constructs prompt: 'Please follow:\n- .mycelium/CONTRACT.md\n- .mycelium/agents/mission/{agent}.md\n\nINPUTS:\n- Progress Artifact: {progress_path}'
         - Prints prompt to stdout
         - Copies prompt to clipboard (pbcopy on macOS, xclip on Linux)
     
@@ -117,20 +117,20 @@ implementer_log:
       - "Updated mission_organizer.md to set current_agent instead of creating AGENT_CALL.md"
       - "Deleted AGENT_CALL_TEMPLATE.md and updated WORKFLOW.md + missions/README.md"
     files_touched:
-      - "ai-team/missions/PROGRESS_TEMPLATE.yaml (modified)"
+      - ".mycelium/missions/PROGRESS_TEMPLATE.yaml (modified)"
       - "scripts/mycelium (created)"
-      - "ai-team/agents/mission/scientist.md (modified)"
-      - "ai-team/agents/mission/implementer.md (modified)"
-      - "ai-team/agents/mission/verifier.md (modified)"
-      - "ai-team/agents/mission/maintainer.md (modified)"
-      - "ai-team/agents/standalone/mission_organizer.md (modified)"
-      - "ai-team/missions/AGENT_CALL_TEMPLATE.md (deleted)"
-      - "ai-team/WORKFLOW.md (modified)"
-      - "ai-team/missions/README.md (modified)"
+      - ".mycelium/agents/mission/scientist.md (modified)"
+      - ".mycelium/agents/mission/implementer.md (modified)"
+      - ".mycelium/agents/mission/verifier.md (modified)"
+      - ".mycelium/agents/mission/maintainer.md (modified)"
+      - ".mycelium/agents/standalone/mission_organizer.md (modified)"
+      - ".mycelium/missions/AGENT_CALL_TEMPLATE.md (deleted)"
+      - ".mycelium/WORKFLOW.md (modified)"
+      - ".mycelium/missions/README.md (modified)"
     commands_run:
       - command: "scripts/mycelium --help"
         result: "SUCCESS - Shows usage with next subcommand"
-      - command: "scripts/mycelium next ai-team/missions/mycelium-next-cli"
+      - command: "scripts/mycelium next .mycelium/missions/mycelium-next-cli"
         result: "SUCCESS - Outputs agent prompt and copies to clipboard"
       - command: "scripts/mycelium next /tmp/test_progress.yaml (with empty current_agent)"
         result: "SUCCESS - Shows 'Mission complete' message"
@@ -153,7 +153,7 @@ verifier_report:
         evidence: "`scripts/mycelium --help` runs successfully, shows usage with next subcommand"
       - item: "CLI reads `current_agent` from a progress.yaml file and outputs the full agent prompt to stdout"
         status: "PASS"
-        evidence: "`scripts/mycelium next ai-team/missions/mycelium-next-cli` outputs correct prompt format with CONTRACT.md + agent file + progress path"
+        evidence: "`scripts/mycelium next .mycelium/missions/mycelium-next-cli` outputs correct prompt format with CONTRACT.md + agent file + progress path"
       - item: "CLI copies the generated prompt to system clipboard"
         status: "PASS"
         evidence: "`pbpaste` confirmed clipboard contains exact prompt text after running CLI"
@@ -162,14 +162,14 @@ verifier_report:
         evidence: "All 4 agent files have Self-sequencing sections with `current_agent` yaml blocks: scientist→implementer, implementer→verifier, verifier→implementer/maintainer, maintainer→empty"
       - item: "AGENT_CALL_TEMPLATE.md is deleted"
         status: "PASS"
-        evidence: "`find_by_name` search returned 0 results for AGENT_CALL_TEMPLATE.md in ai-team/missions/"
+        evidence: "`find_by_name` search returned 0 results for AGENT_CALL_TEMPLATE.md in .mycelium/missions/"
       - item: "mission_organizer sets initial `current_agent` to 'scientist' instead of creating AGENT_CALL.md"
         status: "PASS"
         evidence: "mission_organizer.md step 4 says 'set current_agent: scientist' and output format shows 'current_agent: scientist'"
     commands_rerun:
       - command: "scripts/mycelium --help"
         result: "SUCCESS - Shows usage with next subcommand and examples"
-      - command: "scripts/mycelium next ai-team/missions/mycelium-next-cli"
+      - command: "scripts/mycelium next .mycelium/missions/mycelium-next-cli"
         result: "SUCCESS - Outputs verifier prompt, copies to clipboard"
       - command: "pbpaste"
         result: "SUCCESS - Clipboard contains expected prompt text"
@@ -197,7 +197,7 @@ maintainer_notes:
   behavior_unchanged: true
   updated_commands: []
   updated_paths:
-    - original: "ai-team/missions/AGENT_CALL_TEMPLATE.md"
+    - original: ".mycelium/missions/AGENT_CALL_TEMPLATE.md"
       updated: "(deleted)"
 
 # -------------------------------------------------------------------
@@ -208,7 +208,7 @@ maintainer_summary:
     - "`mycelium` CLI tool for automating agent prompting"
     - "`current_agent` state tracking in `progress.yaml`"
     - "Fully updated documentation and agent workflows"
-  canonical_command: "scripts/mycelium next ai-team/missions/<mission-id>"
+  canonical_command: "scripts/mycelium next .mycelium/missions/<mission-id>"
   expected_outputs:
     - "stdout: Agent prompt text"
     - "clipboard: Agent prompt text (copied automatically)"

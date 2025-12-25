@@ -49,15 +49,15 @@ A **human-gated** multi-agent workflow for AI-assisted development. Unlike fully
 
 ## Quick Start
 
-1. Copy `ai-team/` into your project root
-2. Customize `ai-team/CONTRACT.md` for your project
+1. Copy `.mycelium/` into your project root
+2. Customize `.mycelium/CONTRACT.md` for your project
 3. Start a mission:
    ```
-   Please follow ai-team/agents/standalone/mission_organizer.md with these instructions:
+   Please follow .mycelium/agents/standalone/mission_organizer.md with these instructions:
    <your instructions>
    ```
 
-See [`ai-team/WORKFLOW.md`](ai-team/WORKFLOW.md) for detailed usage.
+See [`.mycelium/WORKFLOW.md`](.mycelium/WORKFLOW.md) for detailed usage.
 
 ---
 
@@ -72,9 +72,10 @@ See [ROADMAP.md](ROADMAP.md) for detailed development phases:
 
 ```
 mycelium/
-├── ai-team/                # Self-contained agent system (copy this to your projects)
+├── .mycelium/                # Self-contained agent system (copy this to your projects)
 │   ├── CONTRACT.md         # Global rules and constraints
 │   ├── WORKFLOW.md         # Detailed workflow documentation
+│   ├── bin/                # CLI tools (e.g. mycelium)
 │   ├── agents/
 │   │   ├── mission/        # Scientist, Implementer, Verifier, Maintainer
 │   │   └── standalone/     # Mission Organizer, Repo Maintainer

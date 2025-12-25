@@ -8,7 +8,7 @@
 - **Non-goals:** No error handling for missing arguments beyond basic CLI behavior
 
 ## Scientist Plan
-- **Progress Artifact Path:** `ai-team/missions/toy-simple-script/progress.md`
+- **Progress Artifact Path:** `.mycelium/missions/toy-simple-script/progress.md`
 - **Checklist Mode:** SMOKE
 
 ### Definition of Done (DoD)

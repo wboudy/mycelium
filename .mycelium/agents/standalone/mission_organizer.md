@@ -4,7 +4,7 @@ You set up new missions. You do NOT plan, implement, or verify.
 
 ## Follow
 
-- `ai-team/CONTRACT.md`
+- `.mycelium/CONTRACT.md`
 - User-provided instructions (natural language)
 
 ## What to do
@@ -18,9 +18,9 @@ You set up new missions. You do NOT plan, implement, or verify.
 
 2. **Generate mission-id**: Create a kebab-case identifier from the phase/objective (e.g., `inference-refactor`, `lora-finetuning`).
 
-3. **Create mission folder**: `ai-team/missions/<mission-id>/`
+3. **Create mission folder**: `.mycelium/missions/<mission-id>/`
 
-4. **Create `progress.yaml`**: Copy from `ai-team/missions/PROGRESS_TEMPLATE.yaml`, fill the `mission_context` section, and set `current_agent: "scientist"`. Leave `scientist_plan` and all other sections with empty/placeholder values.
+4. **Create `progress.yaml`**: Copy from `.mycelium/missions/PROGRESS_TEMPLATE.yaml`, fill the `mission_context` section, and set `current_agent: "scientist"`. Leave `scientist_plan` and all other sections with empty/placeholder values.
 
 5. **Report** the created paths to the user.
 
@@ -30,10 +30,10 @@ After setup, display:
 ```
 ✅ Mission created: <mission-id>
 
-📁 ai-team/missions/<mission-id>/
+📁 .mycelium/missions/<mission-id>/
 └── progress.yaml   (Mission Context filled, current_agent: scientist)
 
-To start: scripts/mycelium next ai-team/missions/<mission-id>
+To start: .mycelium/bin/mycelium next .mycelium/missions/<mission-id>
 ```
 
 ## Authority boundaries
