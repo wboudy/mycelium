@@ -54,27 +54,35 @@ $ mycelium validate .mycelium/missions/my-mission/progress.yaml
 
 ---
 
-### 1.3 Context Metrics & Auto-Compression
+### 1.3 Context Metrics & Auto-Compression ⏸️ (Deferred)
 
-Track token usage to prevent context window saturation.
+> **Status:** Shelved — requires API-level integration for accurate metrics.
 
-**Metrics tracked in `metrics.yaml`:**
-| Metric | Description |
-|--------|-------------|
-| `context_saturation` | % of model's context window used |
-| `token_efficiency` | Code generated / prompt tokens |
-| `iteration_count` | Implementer ↔ Verifier cycles |
-| `time_per_phase` | Wall-clock time per agent |
+**Problem Discovered:**
+A CLI-based `mycelium metrics` command was implemented that measured progress.yaml file size as a proxy for token usage. However, this approach has fundamental limitations:
 
-**Auto-compression trigger:**
-- If `context_saturation > 80%`, Maintainer triggers a "Summary & Compress" sub-mission
-- Compresses verbose logs while preserving decision history
-- Prevents "context rot" in long-running missions
+| Limitation | Why It Matters |
+|------------|----------------|
+| Only measures progress.yaml | Actual context includes all files read, conversation history, system prompts |
+| Can't query conversation context | Model providers don't expose per-conversation token usage externally |
+| Hardcoded model references | Would need configuration per-user since different models have different context windows |
 
-**Sub-tasks:**
-- [ ] Add `metrics.yaml` to mission template
-- [ ] Implement token counting per agent call
-- [ ] Auto-compression logic in Maintainer
+**When This Becomes Feasible:**
+Comprehensive metrics requires Mycelium to sit in the request path:
+- **Phase 2: MCP Server** — Still on the tool side, won't have API visibility
+- **Future: API Proxy Layer** — A local proxy between client and model API could:
+  - Intercept and log all requests/responses
+  - Count actual tokens from API payloads
+  - Track per-conversation and per-mission usage
+  - Warn when approaching context limits
+
+**Archived Mission:** `.mycelium/missions/redacted-context-metrics/`
+
+**Sub-tasks (for API stage):**
+- [ ] Build local proxy server (intercepts model API calls)
+- [ ] Token counting from actual API request/response payloads
+- [ ] Per-model context window configuration
+- [ ] Auto-compression trigger when approaching limits
 
 ---
 

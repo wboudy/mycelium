@@ -1,0 +1,240 @@
+# Progress Artifact
+# Mission: context-metrics
+# 
+# This YAML structure is the single source of truth for mission progress.
+# All agents read from and write to this file.
+
+# -------------------------------------------------------------------
+# CURRENT AGENT (tracks which agent runs next)
+# Valid values: scientist | implementer | verifier | maintainer | "" (empty = complete)
+# Updated by each agent at the end of their run via self-sequencing
+# -------------------------------------------------------------------
+current_agent: ""
+
+# -------------------------------------------------------------------
+# MISSION CONTEXT (filled by Mission Organizer)
+# -------------------------------------------------------------------
+mission_context:
+  phase: "Context Metrics"
+  
+  objective: "Track token usage per mission to prevent context window saturation. Implement metrics tracking and warn users when they should start a new chat or compress progress artifacts."
+  
+  scope:
+    - "Add metrics.yaml template to mission folder structure"
+    - "Track key metrics: context_saturation %, iteration_count, estimated token usage"
+    - "Add model context window reference data (Claude, GPT-4, etc.)"
+    - "Implement 'mycelium metrics <mission>' CLI command to show current usage"
+    - "Add warning when context_saturation > 80% with actionable guidance"
+    - "Update agent files to increment iteration_count during handoffs"
+  
+  constraints:
+    - "Keep metrics lightweight — no external dependencies for token counting"
+    - "Use character/word count as proxy for tokens (approx 4 chars = 1 token)"
+    - "Must work with existing progress.yaml structure"
+    - "Warnings should be actionable (new chat, compress, etc.)"
+  
+  non_goals:
+    - "Automatic compression of progress.yaml (deferred to future mission)"
+    - "Exact token counting (approximation is fine)"
+    - "Integration with model APIs for real-time token counts"
+    - "Tracking time_per_phase or token_efficiency (v2 features)"
+  
+  test_mode: "SMOKE"
+
+# -------------------------------------------------------------------
+# SCIENTIST PLAN (filled by Scientist agent)
+# -------------------------------------------------------------------
+scientist_plan:
+  progress_artifact_path: ".mycelium/missions/context-metrics/progress.yaml"
+  checklist_mode: "SMOKE"
+  
+  definition_of_done:
+    - description: "mycelium metrics <mission-path> displays token estimate"
+      status: "pending"
+    - description: "Command shows context saturation % for ≥2 models (Claude 200K, GPT-4 128K)"
+      status: "pending"
+    - description: "Warning displayed when saturation > 80%"
+      status: "pending"
+    - description: "Iteration count extracted from progress.yaml"
+      status: "pending"
+    - description: "Command returns cleanly with no errors (exit 0, no stderr)"
+      status: "pending"
+  
+  plan_steps:
+    - step: 1
+      description: "Add cmd_metrics function to .mycelium/bin/mycelium CLI"
+      expected_outcome: "Function calculates file size, estimates tokens (4 chars = 1 token), counts iterations"
+    - step: 2
+      description: "Add model context window reference table (Claude 200K, GPT-4 128K, GPT-4o 128K)"
+      expected_outcome: "Saturation percentages calculated against each model's limit"
+    - step: 3
+      description: "Add warning logic for saturation > 80%"
+      expected_outcome: "Clear warning with actionable guidance (new chat, compress)"
+    - step: 4
+      description: "Register metrics command in main() case statement"
+      expected_outcome: "Command accessible via: mycelium metrics <mission-path>"
+    - step: 5
+      description: "Create .mycelium/tests/test_metrics.sh smoke test"
+      expected_outcome: "Test script verifies token output, model references, iteration count"
+  
+  risks_unknowns:
+    - "Character-to-token ratio varies by model (4 chars/token is an approximation)"
+    - "Model context windows may change; hardcoded values need future maintenance"
+  
+  stop_conditions:
+    - "User requests exact token counting (requires external deps/API)"
+    - "Scope expands to automatic compression (explicit non-goal)"
+  
+  test_plan:
+    test_strategy: "Bash smoke tests validating CLI output contains expected elements"
+    acceptance_tests:
+      - description: "Verify token estimate appears in output"
+        type: "integration"
+      - description: "Verify Claude and GPT-4 models listed with saturation %"
+        type: "integration"
+      - description: "Verify iteration count matches log entries"
+        type: "integration"
+
+# -------------------------------------------------------------------
+# IMPLEMENTER LOG (appended by Implementer agent, one entry per iteration)
+# -------------------------------------------------------------------
+implementer_log:
+  - iteration: 1
+    changes:
+      - "Added cmd_metrics function to .mycelium/bin/mycelium (~95 lines)"
+      - "Implemented token estimation (4 chars = 1 token)"
+      - "Added model context windows: Claude 200K, GPT-4 128K, GPT-4o 128K"
+      - "Added >80% saturation warning with actionable guidance"
+      - "Created smoke test script at .mycelium/tests/test_metrics.sh"
+    files_touched:
+      - ".mycelium/bin/mycelium"
+      - ".mycelium/tests/test_metrics.sh (new)"
+    commands_run:
+      - command: ".mycelium/bin/mycelium metrics .mycelium/missions/context-metrics"
+        result: "SUCCESS - displayed token estimate, saturation %, iterations"
+      - command: "bash .mycelium/tests/test_metrics.sh"
+        result: "SUCCESS - all 5 smoke tests passed"
+    outputs_produced:
+      - "Token estimate: ~1633 tokens for 6.4KB file"
+      - "Saturation: Claude 0.8%, GPT-4 1.3%, GPT-4o 1.3%"
+      - "Iteration count: 2"
+    issues_todo:
+      - "None - all DoD criteria appear satisfied"
+    tests_written:
+      - ".mycelium/tests/test_metrics.sh"
+    tests_run:
+      - command: "bash .mycelium/tests/test_metrics.sh"
+        result: "PASS - all 5 tests passed"
+
+# -------------------------------------------------------------------
+# VERIFIER REPORT (appended by Verifier agent, one entry per iteration)
+# -------------------------------------------------------------------
+verifier_report:
+  - iteration: 1
+    dod_checks:
+      - item: "mycelium metrics <mission-path> displays token estimate"
+        status: "PASS"
+        evidence: "Output shows 'Progress file: 7.3 KB (~1858 tokens)'"
+      - item: "Command shows context saturation % for ≥2 models"
+        status: "PASS"
+        evidence: "Output shows Claude 200K (0.9%), GPT-4 128K (1.5%), GPT-4o 128K (1.5%)"
+      - item: "Warning displayed when saturation > 80%"
+        status: "PASS"
+        evidence: "Code review confirms threshold=80 check at line 426, warning at line 428"
+      - item: "Iteration count extracted from progress.yaml"
+        status: "PASS"
+        evidence: "Output shows 'Iterations: 2'"
+      - item: "Command returns cleanly with no errors"
+        status: "PASS"
+        evidence: "Exit code 0, no stderr output"
+    commands_rerun:
+      - command: ".mycelium/bin/mycelium metrics .mycelium/missions/context-metrics"
+        result: "SUCCESS - displays token estimate, saturation %, iterations, healthy status"
+      - command: "bash .mycelium/tests/test_metrics.sh"
+        result: "SUCCESS - all 5 smoke tests passed"
+      - command: ".mycelium/bin/mycelium metrics .mycelium/missions/nonexistent"
+        result: "EXPECTED ERROR - 'Path does not exist' with exit 1"
+      - command: ".mycelium/bin/mycelium metrics"
+        result: "EXPECTED ERROR - usage message with exit 1"
+    required_fixes: []
+    optional_improvements:
+      - "Consider adding human-readable file size formatting (e.g., '7.3 KB' already present)"
+      - "Future: add --json flag for machine-readable output"
+    test_results:
+      - test_name: "Token estimate displayed"
+        status: "PASS"
+        output: "grep found 'tokens' in output"
+      - test_name: "Multiple models displayed"
+        status: "PASS"
+        output: "Claude 200K and GPT-4 found in output"
+      - test_name: "Iteration count displayed"
+        status: "PASS"
+        output: "'Iterations' found in output"
+      - test_name: "Saturation percentages displayed"
+        status: "PASS"
+        output: "Regex matched percentage format"
+      - test_name: "Status message displayed"
+        status: "PASS"
+        output: "'healthy' found in output"
+    overall_status: "PASS — ready for Maintainer"
+    canonical_command: ".mycelium/bin/mycelium metrics .mycelium/missions/<mission-id>"
+    expected_outputs:
+      - "Mission name, file size (KB), token estimate"
+      - "Context saturation % for Claude 200K, GPT-4 128K, GPT-4o 128K"
+      - "Iteration count extracted from progress.yaml"
+      - "Status: healthy (green) or warning (yellow, >80%)"
+
+# -------------------------------------------------------------------
+# MAINTAINER NOTES (filled by Maintainer agent)
+# -------------------------------------------------------------------
+maintainer_notes:
+  changes:
+    - "No refactors needed — implementation follows existing CLI patterns"
+    - "Code is well-commented and structured consistently with other commands"
+  behavior_unchanged: true
+  notes:
+    - "GPT-4 and GPT-4o share same 128K context window (currently duplicated variable)"
+    - "Model context windows are hardcoded — future maintenance may be needed"
+  updated_commands: []
+  updated_paths: []
+
+# -------------------------------------------------------------------
+# MAINTAINER SUMMARY (filled by Maintainer agent)
+# -------------------------------------------------------------------
+maintainer_summary:
+  what_exists:
+    - "New CLI command: mycelium metrics <mission-path>"
+    - "Displays file size (KB), token estimate (~chars/4)"
+    - "Shows context saturation % against Claude 200K, GPT-4 128K, GPT-4o 128K"
+    - "Warns with actionable guidance when saturation >80%"
+    - "Smoke tests at .mycelium/tests/test_metrics.sh (5 tests)"
+  canonical_command: ".mycelium/bin/mycelium metrics .mycelium/missions/<mission-id>"
+  expected_outputs:
+    - "Mission name and progress file size"
+    - "Token estimate (approx 4 chars = 1 token)"
+    - "Iteration count from implementer_log + verifier_report"
+    - "Context saturation % for 3 model context windows"
+    - "Green checkmark if healthy, yellow warning if >80%"
+  notes:
+    - "Token estimation is approximate — actual tokenization varies by model"
+    - "80% threshold uses GPT-4 128K as reference (smallest context window)"
+
+# -------------------------------------------------------------------
+# COMMIT MESSAGE (generated by Maintainer agent)
+# -------------------------------------------------------------------
+commit_message:
+  type: "feat"
+  subject: "add mycelium metrics command for context saturation tracking"
+  body: |
+    Add `mycelium metrics <mission-path>` CLI command to track token usage
+    and warn users when context windows approach saturation.
+    
+    Features:
+    - Estimate tokens from progress.yaml file size (4 chars ≈ 1 token)
+    - Show context saturation % for Claude 200K, GPT-4 128K, GPT-4o 128K
+    - Display iteration count from implementer_log and verifier_report
+    - Warn when saturation exceeds 80% with actionable guidance
+    
+    Testing:
+    - Added .mycelium/tests/test_metrics.sh smoke tests (5 tests)
+    - Verified edge cases: missing path, no args both error correctly
