@@ -1,0 +1,300 @@
+# Progress Artifact: litellm-orchestration
+# Copy to: .mycelium/missions/litellm-orchestration/progress.yaml
+# 
+# This YAML structure is the single source of truth for mission progress.
+# All agents read from and write to this file.
+
+# -------------------------------------------------------------------
+# CURRENT AGENT (tracks which agent runs next)
+# Valid values: scientist | implementer | verifier | maintainer | "" (empty = complete)
+# Updated by each agent at the end of their run via self-sequencing
+# -------------------------------------------------------------------
+current_agent: ""
+
+# -------------------------------------------------------------------
+# MISSION CONTEXT (filled by Mission Organizer)
+# -------------------------------------------------------------------
+mission_context:
+  # Short name for the development phase
+  phase: "Orchestration"
+  
+  # What this mission aims to accomplish
+  objective: "Transition Mycelium into a robust, automated orchestration system by integrating LiteLLM to facilitate a Bring Your Own Key (BYOK) environment with centralized model configuration and CLI-driven execution."
+  
+  # Specific tasks, files, or areas this mission covers
+  scope:
+    - "Integrate LiteLLM for unified API key management (Anthropic, OpenAI, Google via env vars)"
+    - "Create a single unified calling interface for Scientist, Implementer, and Verifier agent completions"
+    - "Shift to CLI-first interaction model while preserving filesystem-as-state principle"
+    - "Enhance `mycelium next` command for automated agent handoffs with LiteLLM completions"
+    - "Enhance `mycelium status` command to display LiteLLM usage metadata"
+    - "Programmatically extract and log LiteLLM usage metadata (tokens, USD cost) into mission YAML artifacts"
+    - "Update CONTRACT.md with orchestration rules: automated retry logic for provider failures"
+    - "Add mandatory Human-in-the-Loop approval gate before Implementer can modify source code"
+  
+  # Limitations, requirements, or rules that must be followed
+  constraints:
+    - "progress.yaml must remain the immutable ledger of truth for auditing"
+    - "API keys MUST be provided via environment variables only (ANTHROPIC_API_KEY, OPENAI_API_KEY, GOOGLE_API_KEY)"
+    - "No secrets committed to repository"
+    - "LiteLLM must be the only model-calling interface (no direct SDK calls)"
+    - "Human approval gate is mandatory before any source code modifications"
+    - "CLI must work from repo root without dependencies on chat memory"
+  
+  # What is explicitly out of scope for this mission
+  non_goals:
+    - "Building a full MCP server (Phase 2.1 in roadmap - separate mission)"
+    - "LangGraph integration (Phase 2.2)"
+    - "Role-specific model routing (Phase 3.1)"
+    - "Historian agent / RAG knowledge base (Phase 3.2)"
+    - "Headless execution mode (Phase 3.3)"
+    - "Web UI or dashboard"
+    - "Multi-device sync or cloud features"
+  
+  # Testing mode - determines testing requirements for this mission
+  # Valid values: NONE | SMOKE | FULL
+  test_mode: "SMOKE"
+
+# -------------------------------------------------------------------
+# SCIENTIST PLAN (filled by Scientist agent)
+# -------------------------------------------------------------------
+scientist_plan:
+  # Path to this progress artifact (for reference)
+  progress_artifact_path: ".mycelium/missions/litellm-orchestration/progress.yaml"
+  
+  # Checklist mode determines verification rigor
+  checklist_mode: "SMOKE"
+  
+  # Definition of Done - clear PASS/FAIL criteria
+  definition_of_done:
+    - description: "LiteLLM is added to requirements.txt and installable via `pip install -r requirements.txt`"
+      status: "pending"
+    - description: "Python module `src/mycelium/llm.py` exists with a `complete()` function that calls LiteLLM and returns structured response with usage metadata"
+      status: "pending"
+    - description: "Environment variables ANTHROPIC_API_KEY, OPENAI_API_KEY, GOOGLE_API_KEY are documented and used for provider authentication"
+      status: "pending"
+    - description: "`mycelium run <mission-path>` CLI command invokes the current agent via LiteLLM and logs usage to progress.yaml"
+      status: "pending"
+    - description: "`mycelium status <mission-path>` displays cumulative token usage and USD cost from progress.yaml"
+      status: "pending"
+    - description: "progress.yaml schema extended with `llm_usage` section containing per-agent token counts and costs"
+      status: "pending"
+    - description: "CONTRACT.md updated with Orchestration Rules section including retry logic (3 retries with exponential backoff)"
+      status: "pending"
+    - description: "Human-in-the-Loop approval gate: `mycelium run` pauses before Implementer and requires explicit `--approve` flag or interactive confirmation"
+      status: "pending"
+  
+  # Ordered steps to accomplish the mission
+  plan_steps:
+    - step: 1
+      description: "Add LiteLLM dependency to requirements.txt"
+      expected_outcome: "`pip install -r requirements.txt` installs litellm package"
+    - step: 2
+      description: "Create Python LLM interface module at src/mycelium/llm.py"
+      expected_outcome: "Module exports `complete(model, messages, agent_role)` function that returns response + usage metadata (tokens, cost)"
+    - step: 3
+      description: "Create Python orchestrator module at src/mycelium/orchestrator.py"
+      expected_outcome: "Module exports `run_agent(mission_path)` that reads progress.yaml, builds prompt, calls LiteLLM, logs usage back to YAML"
+    - step: 4
+      description: "Extend PROGRESS_TEMPLATE.yaml with llm_usage schema"
+      expected_outcome: "Template includes `llm_usage` section with `runs` array containing agent_role, model, tokens, cost_usd, timestamp"
+    - step: 5
+      description: "Add `mycelium run` CLI command (Python-based)"
+      expected_outcome: "Command parses mission path, invokes orchestrator, implements HITL gate for Implementer (--approve flag or interactive confirm)"
+    - step: 6
+      description: "Update CONTRACT.md with Orchestration Rules"
+      expected_outcome: "New section defines: provider retry logic (3 retries, exponential backoff), HITL approval gate requirement, usage logging mandate"
+  
+  # Potential issues or unknowns that could affect the mission
+  risks_unknowns:
+    - "LiteLLM cost calculation may differ from actual provider billing — document as estimate only"
+    - "Different providers have different rate limits — retry logic may need provider-specific tuning"
+    - "Agent prompt construction needs to pull agent .md files and progress.yaml — path resolution from repo root"
+    - "Existing bash CLI (mycelium next) needs to coexist with new Python CLI (mycelium run) during transition"
+  
+  # Conditions that should cause the agent to stop and ask the user
+  stop_conditions:
+    - "If user wants a different model default than claude-sonnet-4-20250514"
+    - "If user wants synchronous file watching (mycelium watch) — out of scope for this mission"
+    - "If LiteLLM doesn't support a required provider"
+    - "If approval gate UX needs GUI instead of CLI — out of scope"
+  
+  # Test plan (test_mode = SMOKE)
+  test_plan:
+    test_strategy: "Unit tests for LLM interface module + integration test for CLI commands with mocked LiteLLM responses"
+    acceptance_tests:
+      - description: "llm.complete() returns structured response with usage.prompt_tokens, usage.completion_tokens, cost_usd"
+        type: "unit"
+      - description: "`mycelium run --help` displays usage information"
+        type: "e2e"
+      - description: "`mycelium run <mission>` with Implementer as current_agent prompts for approval (or exits without --approve)"
+        type: "e2e"
+      - description: "`mycelium status <mission>` shows token/cost totals when llm_usage exists"
+        type: "e2e"
+      - description: "Retry logic invoked on simulated provider failure (mock 429 response)"
+        type: "integration"
+
+# -------------------------------------------------------------------
+# IMPLEMENTER LOG (appended by Implementer agent, one entry per iteration)
+# -------------------------------------------------------------------
+implementer_log:
+  - iteration: 1
+    changes:
+      - "Added litellm>=1.0.0 to requirements.txt and pyproject.toml dependencies"
+      - "Created src/mycelium/llm.py with complete() function, retry logic (3 retries, exponential backoff), and usage metadata extraction"
+      - "Created src/mycelium/orchestrator.py with agent execution, prompt building from CONTRACT.md and agent templates, HITL approval gate for Implementer, and usage logging to progress.yaml"
+      - "Extended PROGRESS_TEMPLATE.yaml with llm_usage section tracking per-run tokens, costs, and timestamps"
+      - "Created src/mycelium/cli.py with mycelium-py run and status commands, added entry point in pyproject.toml"
+    files_touched:
+      - "requirements.txt"
+      - "pyproject.toml"
+      - "src/mycelium/__init__.py"
+      - "src/mycelium/llm.py [NEW]"
+      - "src/mycelium/orchestrator.py [NEW]"
+      - "src/mycelium/cli.py [NEW]"
+      - ".mycelium/missions/PROGRESS_TEMPLATE.yaml"
+      - ".mycelium/CONTRACT.md"
+      - "tests/test_llm.py [NEW]"
+      - "tests/test_orchestrator.py [NEW]"
+    commands_run:
+      - command: "pip install -e '.[dev]'"
+        result: "Successfully installed mycelium-0.1.0 with litellm-1.80.11 and all dependencies"
+      - command: "python -m pytest tests/ -v"
+        result: "31 passed in 7.10s"
+      - command: "mycelium-py --help"
+        result: "Shows usage with run and status commands"
+      - command: "mycelium-py run .mycelium/missions/litellm-orchestration --dry-run"
+        result: "Builds and displays prompt without calling LLM"
+      - command: "mycelium-py status .mycelium/missions/litellm-orchestration"
+        result: "Shows mission status with LLM usage section"
+    outputs_produced:
+      - "src/mycelium/llm.py - Unified LLM interface via LiteLLM"
+      - "src/mycelium/orchestrator.py - Agent orchestration with HITL gate"
+      - "src/mycelium/cli.py - Python CLI with run and status commands"
+      - "mycelium-py CLI entry point installed"
+    issues_todo:
+      - "None - all plan steps completed"
+    tests_written:
+      - "tests/test_llm.py - 16 unit tests for llm.py (UsageMetadata, CompletionResponse, _verify_api_keys, _calculate_cost, complete with retry logic)"
+      - "tests/test_orchestrator.py - 15 tests for orchestrator.py and CLI (load_progress, append_llm_usage, check_hitl_approval, get_usage_summary, run_agent, CLI help)"
+    tests_run:
+      - command: "python -m pytest tests/ -v"
+        result: "PASS - 31 tests passed"
+
+# -------------------------------------------------------------------
+# VERIFIER REPORT (appended by Verifier agent, one entry per iteration)
+# -------------------------------------------------------------------
+verifier_report:
+  - iteration: 1
+    dod_checks:
+      - item: "LiteLLM is added to requirements.txt and installable via pip install -r requirements.txt"
+        status: "PASS"
+        evidence: "requirements.txt line 9: litellm>=1.0.0; pyproject.toml dependencies include litellm>=1.0.0; pip install succeeded"
+      - item: "Python module src/mycelium/llm.py exists with complete() function returning structured response with usage metadata"
+        status: "PASS"
+        evidence: "llm.py exists (264 lines), exports complete() function returning CompletionResponse with UsageMetadata (prompt_tokens, completion_tokens, total_tokens, cost_usd)"
+      - item: "Environment variables ANTHROPIC_API_KEY, OPENAI_API_KEY, GOOGLE_API_KEY are documented and used"
+        status: "PASS"
+        evidence: "llm.py docstring documents all env vars; _verify_api_keys() checks all three; CONTRACT.md table documents provider-to-key mapping"
+      - item: "mycelium run <mission-path> CLI command invokes current agent via LiteLLM and logs usage to progress.yaml"
+        status: "PASS"
+        evidence: "mycelium-py run --help shows command; --dry-run builds and displays prompt; orchestrator logs usage via append_llm_usage()"
+      - item: "mycelium status <mission-path> displays cumulative token usage and USD cost from progress.yaml"
+        status: "PASS"
+        evidence: "mycelium-py status .mycelium/missions/litellm-orchestration shows mission info and LLM Usage section with runs/tokens/cost"
+      - item: "progress.yaml schema extended with llm_usage section containing per-agent token counts and costs"
+        status: "PASS"
+        evidence: "PROGRESS_TEMPLATE.yaml lines 179-193 define llm_usage with runs array (agent_role, model, tokens, cost_usd, timestamp) and totals"
+      - item: "CONTRACT.md updated with Orchestration Rules section including retry logic (3 retries with exponential backoff)"
+        status: "PASS"
+        evidence: "CONTRACT.md lines 85-141 define orchestration rules: LiteLLM integration, retry logic (3 retries, 1s→2s→4s), HITL gate, usage logging"
+      - item: "Human-in-the-Loop approval gate: mycelium run pauses before Implementer and requires --approve flag or interactive confirmation"
+        status: "PASS"
+        evidence: "orchestrator.py REQUIRES_APPROVAL = {'implementer'}; check_hitl_approval() prompts for confirmation; --approve/-y flag bypasses"
+    commands_rerun:
+      - command: "python -m pytest tests/ -v"
+        result: "PASS - 31 tests passed in 4.00s"
+      - command: "mycelium-py --help"
+        result: "Shows usage with run and status commands"
+      - command: "mycelium-py run --help"
+        result: "Shows usage with mission_path, --model, --approve, --dry-run options"
+      - command: "mycelium-py status .mycelium/missions/litellm-orchestration"
+        result: "Displays mission info, current agent (verifier), objective, and LLM Usage section"
+      - command: "mycelium-py run .mycelium/missions/litellm-orchestration --dry-run"
+        result: "Builds and displays full prompt for verifier agent without calling LLM"
+    required_fixes: []
+    optional_improvements:
+      - "Consider adding --json output flag for programmatic consumption of status command"
+      - "Consider adding mycelium-py list command to show all missions (currently in bash CLI)"
+    test_results:
+      - test_name: "tests/test_llm.py (16 tests)"
+        status: "PASS"
+        output: "All 16 unit tests for UsageMetadata, CompletionResponse, _verify_api_keys, _calculate_cost, complete() pass"
+      - test_name: "tests/test_orchestrator.py (15 tests)"
+        status: "PASS"
+        output: "All 15 tests for load_progress, append_llm_usage, check_hitl_approval, get_usage_summary, run_agent, CLI help pass"
+    overall_status: "PASS — ready for Maintainer"
+    canonical_command: "mycelium-py run .mycelium/missions/<mission> [--approve] [--dry-run]"
+    expected_outputs:
+      - "src/mycelium/llm.py - Unified LLM interface via LiteLLM"
+      - "src/mycelium/orchestrator.py - Agent orchestration with HITL gate"
+      - "src/mycelium/cli.py - Python CLI with run and status commands"
+      - "mycelium-py CLI entry point"
+
+# -------------------------------------------------------------------
+# MAINTAINER NOTES (filled by Maintainer agent)
+# -------------------------------------------------------------------
+maintainer_notes:
+  changes:
+    - "No code refactoring performed - implementation is clean and well-structured"
+    - "Code review confirms: clear separation of concerns across llm.py, orchestrator.py, cli.py"
+    - "All documented commands verified working without modification"
+  behavior_unchanged: true
+  updated_commands: []
+  updated_paths: []
+
+# -------------------------------------------------------------------
+# MAINTAINER SUMMARY (filled by Maintainer agent)
+# -------------------------------------------------------------------
+maintainer_summary:
+  what_exists:
+    - "src/mycelium/llm.py - Unified LLM interface via LiteLLM with retry logic (3 retries, exponential backoff)"
+    - "src/mycelium/orchestrator.py - Agent orchestration with HITL approval gate for Implementer"
+    - "src/mycelium/cli.py - Python CLI entry point (mycelium-py) with run and status commands"
+    - "tests/test_llm.py + tests/test_orchestrator.py - 31 unit/integration tests (SMOKE coverage)"
+    - ".mycelium/CONTRACT.md - Updated with Orchestration Rules section"
+  canonical_command: |
+    # Run an agent for a mission (with HITL approval for Implementer)
+    mycelium-py run .mycelium/missions/<mission> [--approve] [--dry-run] [--model <model>]
+    
+    # Check mission status with LLM usage
+    mycelium-py status .mycelium/missions/<mission> [--verbose]
+  expected_outputs:
+    - "Agent response printed to stdout"
+    - "Usage metadata (tokens, cost) logged to progress.yaml llm_usage section"
+  notes:
+    - "Cost estimates may differ from actual provider billing - treat as approximate"
+    - "HITL gate only applies to Implementer agent; other agents run without approval prompt"
+    - "Bash CLI (mycelium next/status/list/agents) coexists with Python CLI (mycelium-py run/status)"
+
+# -------------------------------------------------------------------
+# COMMIT MESSAGE (generated by Maintainer agent)
+# -------------------------------------------------------------------
+commit_message:
+  type: "feat"
+  subject: "Add LiteLLM orchestration with Python CLI"
+  body: |
+    Integrate LiteLLM for unified LLM provider access with BYOK environment.
+    
+    - Add litellm>=1.0.0 dependency for Anthropic/OpenAI/Google support
+    - Create src/mycelium/llm.py with complete() function, retry logic (3 retries,
+      exponential backoff), and usage metadata extraction
+    - Create src/mycelium/orchestrator.py for agent execution with prompt building,
+      HITL approval gate for Implementer, and usage logging to progress.yaml
+    - Create src/mycelium/cli.py with mycelium-py run and status commands
+    - Extend PROGRESS_TEMPLATE.yaml with llm_usage schema for token/cost tracking
+    - Update CONTRACT.md with Orchestration Rules section
+    - Add 31 unit/integration tests for SMOKE coverage
+    
+    Closes: litellm-orchestration mission
+

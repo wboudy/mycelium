@@ -74,7 +74,6 @@ Testing is integrated into the agent workflow. The `test_mode` field in `mission
 - Verifier runs all tests; any failure = mission FAIL (for SMOKE/FULL modes)
 
 
-
 ## Stop Conditions (all agents)
 
 Stop and ask the user if:
@@ -82,4 +81,61 @@ Stop and ask the user if:
 - A design or scope decision is needed
 - Failures are unclear
 - Compute or training scope expands significantly
+
+## Orchestration Rules
+
+### LiteLLM Integration
+
+All LLM calls go through LiteLLM for unified provider access. This enables BYOK (Bring Your Own Key) via environment variables:
+
+| Provider  | Environment Variable  |
+|-----------|----------------------|
+| Anthropic | `ANTHROPIC_API_KEY`  |
+| OpenAI    | `OPENAI_API_KEY`     |
+| Google    | `GOOGLE_API_KEY` or `GEMINI_API_KEY` |
+
+Default model: `anthropic/claude-sonnet-4-20250514` (override via `MYCELIUM_MODEL` env var or `--model` flag)
+
+### Retry Logic
+
+Provider failures are handled with automatic retry:
+- **Max retries**: 3
+- **Backoff**: Exponential (1s → 2s → 4s)
+- **Retryable errors**: Rate limits (429), timeouts, transient network failures
+- **Non-retryable**: Authentication errors, bad requests, invalid prompts
+
+### Human-in-the-Loop (HITL) Approval Gate
+
+Before the **Implementer** agent can modify source code, explicit approval is required:
+
+```bash
+# Interactive prompt (default)
+mycelium-py run .mycelium/missions/<mission>
+
+# Auto-approve (bypass HITL)
+mycelium-py run .mycelium/missions/<mission> --approve
+```
+
+This prevents unreviewed code changes and maintains human oversight.
+
+### Usage Logging
+
+Every LLM call logs usage metadata to `progress.yaml`:
+
+```yaml
+llm_usage:
+  runs:
+    - agent_role: implementer
+      model: anthropic/claude-sonnet-4-20250514
+      total_tokens: 4523
+      cost_usd: 0.013569
+      timestamp: 2024-12-26T14:30:00Z
+  total_tokens: 4523
+  total_cost_usd: 0.013569
+```
+
+View cumulative usage with:
+```bash
+mycelium-py status .mycelium/missions/<mission> --verbose
+```
 
