@@ -4,7 +4,7 @@ Orchestrator Module for Mycelium.
 Manages the execution of agents by:
 1. Reading mission progress.yaml
 2. Building agent prompts from templates
-3. Invoking LLM via the llm module
+3. Invoking LLM via the llm module (handling tool calls)
 4. Logging usage back to progress.yaml
 5. Implementing Human-in-the-Loop approval gate for Implementer
 """
@@ -270,6 +270,7 @@ def run_agent(
     model: str | None = None,
     auto_approve: bool = False,
     dry_run: bool = False,
+    enable_tools: bool = True,
 ) -> CompletionResponse:
     """
     Run the current agent for a mission via LLM.
@@ -279,10 +280,13 @@ def run_agent(
         model: Optional model override (defaults to claude-sonnet-4-20250514).
         auto_approve: Bypass HITL approval for Implementer.
         dry_run: If True, don't actually call LLM, just build prompt.
+        enable_tools: If True, provide tools to LLM and execute tool calls.
         
     Returns:
         CompletionResponse with agent output.
     """
+    import json
+    
     mission_path = Path(mission_path)
     
     # Find repo root
@@ -302,7 +306,14 @@ def run_agent(
         return CompletionResponse(success=False, error=f"YAML parse error: {e}")
     
     # Get current agent
-    current_agent = progress.get("current_agent", "").strip()
+    raw_agent = progress.get("current_agent", "")
+    if isinstance(raw_agent, dict):
+        if "current_agent" in raw_agent:
+            current_agent = str(raw_agent["current_agent"]).strip()
+        else:
+            current_agent = str(raw_agent).strip()
+    else:
+        current_agent = str(raw_agent).strip()
     
     if not current_agent:
         return CompletionResponse(
@@ -337,21 +348,131 @@ def run_agent(
             error=f"Execution not approved for {current_agent}. Use --approve flag to bypass.",
         )
     
-    # Call LLM
+    # Call LLM with optional tool support
     from mycelium.llm import DEFAULT_MODEL
     
     effective_model = model or os.environ.get("MYCELIUM_MODEL", DEFAULT_MODEL)
     
+    # Get tools if enabled
+    tools = None
+    if enable_tools:
+        try:
+            from mycelium.tools import TOOL_SCHEMAS, execute_tool, format_tool_result
+            tools = TOOL_SCHEMAS
+            logger.info(f"Tools enabled: {len(tools)} tools available")
+        except ImportError as e:
+            logger.warning(f"Could not import tools module: {e}")
+    
     logger.info(f"Running {current_agent} agent with model {effective_model}")
     
-    response = complete(
-        messages=messages,
-        model=effective_model,
-        agent_role=current_agent,
+    # Tool execution loop
+    max_tool_iterations = 20
+    total_usage = None
+    final_content = ""
+    
+    for iteration in range(max_tool_iterations):
+        response = complete(
+            messages=messages,
+            model=effective_model,
+            agent_role=current_agent,
+            tools=tools,
+        )
+        
+        # Accumulate usage
+        if total_usage is None:
+            total_usage = response.usage
+        else:
+            # Add usage from this iteration
+            from mycelium.llm import UsageMetadata
+            total_usage = UsageMetadata(
+                prompt_tokens=total_usage.prompt_tokens + response.usage.prompt_tokens,
+                completion_tokens=total_usage.completion_tokens + response.usage.completion_tokens,
+                total_tokens=total_usage.total_tokens + response.usage.total_tokens,
+                cost_usd=total_usage.cost_usd + response.usage.cost_usd,
+                model=response.usage.model,
+            )
+        
+        if not response.success:
+            # Return failure immediately
+            response.usage = total_usage
+            return response
+        
+        # If no tool calls, we're done
+        if not response.tool_calls:
+            final_content = response.content
+            logger.info(f"Agent completed after {iteration + 1} iteration(s)")
+            break
+        
+        # Execute tool calls and add results to messages
+        logger.info(f"Executing {len(response.tool_calls)} tool call(s) in iteration {iteration + 1}")
+        
+        # Add assistant message with tool calls
+        assistant_message = {"role": "assistant", "content": response.content or ""}
+        if response.tool_calls:
+            # Format for LLM context
+            assistant_message["tool_calls"] = [
+                {
+                    "id": tc["id"],
+                    "type": "function",
+                    "function": {
+                        "name": tc["name"],
+                        "arguments": tc["arguments"],
+                    },
+                }
+                for tc in response.tool_calls
+            ]
+        messages.append(assistant_message)
+        
+        # Execute each tool and add results
+        for tool_call in response.tool_calls:
+            tool_name = tool_call["name"]
+            try:
+                arguments = json.loads(tool_call["arguments"])
+            except json.JSONDecodeError as e:
+                tool_result = {"error": f"Invalid JSON arguments: {e}"}
+                logger.error(f"Failed to parse tool arguments: {e}")
+            else:
+                try:
+                    # Inject auto_approve for write_file and run_command
+                    if tool_name in ("write_file", "run_command") and auto_approve:
+                        arguments["auto_approve"] = True
+                    if tool_name in ("write_file", "run_command") and "mission_path" not in arguments:
+                        arguments["mission_path"] = str(mission_path)
+                    
+                    result = execute_tool(tool_name, arguments)
+                    tool_result = format_tool_result(tool_name, result)
+                except Exception as e:
+                    tool_result = json.dumps({"error": str(e)})
+                    logger.error(f"Tool {tool_name} failed: {e}")
+            
+            # Add tool result message
+            messages.append({
+                "role": "tool",
+                "tool_call_id": tool_call["id"],
+                "content": tool_result if isinstance(tool_result, str) else json.dumps(tool_result),
+            })
+        
+        # If we've hit the limit, break with warning
+        if iteration == max_tool_iterations - 1:
+            logger.warning(f"Hit max tool iterations ({max_tool_iterations}), stopping")
+            final_content = response.content or "Max tool iterations reached"
+    
+    # Create final response with accumulated usage
+    final_response = CompletionResponse(
+        content=final_content,
+        usage=total_usage,
+        success=True,
     )
     
     # Log usage to progress.yaml
-    progress = append_llm_usage(progress, current_agent, response)
+    # RELOAD from disk first to capture changes made by tool execution
+    try:
+        progress = load_progress(mission_path)
+    except Exception as e:
+        logger.warning(f"Could not reload progress.yaml to save usage: {e}")
+        # Proceed with in-memory progress (better than nothing), though stale
+        
+    progress = append_llm_usage(progress, current_agent, final_response)
     
     # Save updated progress
     try:
@@ -360,17 +481,17 @@ def run_agent(
     except Exception as e:
         logger.error(f"Failed to save progress: {e}")
         # Don't fail the response, but note the error
-        if response.error:
-            response.error += f"; Failed to save progress: {e}"
+        if final_response.error:
+            final_response.error += f"; Failed to save progress: {e}"
         else:
-            response = CompletionResponse(
-                content=response.content,
-                usage=response.usage,
-                success=response.success,
+            final_response = CompletionResponse(
+                content=final_response.content,
+                usage=final_response.usage,
+                success=final_response.success,
                 error=f"Warning: Failed to save progress: {e}",
             )
     
-    return response
+    return final_response
 
 
 def get_usage_summary(mission_path: str | Path) -> dict[str, Any]:

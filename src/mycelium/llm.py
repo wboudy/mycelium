@@ -61,15 +61,19 @@ class CompletionResponse:
     usage: UsageMetadata = field(default_factory=UsageMetadata)
     success: bool = True
     error: str | None = None
+    tool_calls: list[dict[str, Any]] | None = None  # List of {id, name, arguments}
     
     def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for YAML serialization."""
-        return {
+        result = {
             "content": self.content,
             "usage": self.usage.to_dict(),
             "success": self.success,
             "error": self.error,
         }
+        if self.tool_calls:
+            result["tool_calls"] = self.tool_calls
+        return result
 
 
 def _calculate_cost(model: str, prompt_tokens: int, completion_tokens: int) -> float:
@@ -93,8 +97,9 @@ def _calculate_cost(model: str, prompt_tokens: int, completion_tokens: int) -> f
         logger.warning(f"Could not calculate exact cost for {model}, using estimate")
         
         # Default pricing estimates (per 1M tokens)
-        input_cost_per_1m = 3.0   # $3 per 1M input tokens
-        output_cost_per_1m = 15.0  # $15 per 1M output tokens
+        # Updated to reflect cheaper modern models (Gemini 1.5/Flash, Claude Haiku)
+        input_cost_per_1m = 0.50   # $0.50 per 1M input tokens
+        output_cost_per_1m = 2.00  # $2.00 per 1M output tokens
         
         input_cost = (prompt_tokens / 1_000_000) * input_cost_per_1m
         output_cost = (completion_tokens / 1_000_000) * output_cost_per_1m
@@ -121,11 +126,13 @@ def _verify_api_keys() -> list[str]:
 
 
 def complete(
-    messages: list[dict[str, str]],
+    messages: list[dict[str, Any]],
     model: str = DEFAULT_MODEL,
     agent_role: str = "",
     temperature: float = 0.0,
     max_tokens: int = 8192,
+    tools: list[dict[str, Any]] | None = None,
+    tool_choice: str | None = None,
 ) -> CompletionResponse:
     """
     Execute LLM completion via LiteLLM with retry logic.
@@ -191,15 +198,46 @@ def complete(
                 f"LLM call: model={model}, agent={agent_role}, attempt={attempt}/{MAX_RETRIES}"
             )
             
-            response = litellm.completion(
-                model=model,
-                messages=messages,
-                temperature=temperature,
-                max_tokens=max_tokens,
-            )
+            # Build completion kwargs
+            completion_kwargs = {
+                "model": model,
+                "messages": messages,
+                "messages": messages,
+                "max_tokens": max_tokens,
+            }
+            
+            # Adjust temperature for specific models that require it
+            # Gemini models often fail/warn with temp < 1.0
+            if "gemini" in model.lower() and temperature == 0.0:
+                logger.info(f"Adjusting temperature to 1.0 for Gemini model: {model}")
+                completion_kwargs["temperature"] = 1.0
+            else:
+                completion_kwargs["temperature"] = temperature
+            
+            # Add tools if provided
+            if tools:
+                completion_kwargs["tools"] = tools
+                if tool_choice:
+                    completion_kwargs["tool_choice"] = tool_choice
+            
+            response = litellm.completion(**completion_kwargs)
             
             # Extract response content
-            content = response.choices[0].message.content or ""
+            message = response.choices[0].message
+            content = message.content or ""
+            
+            # Extract tool calls if present
+            extracted_tool_calls = None
+            if hasattr(message, "tool_calls") and message.tool_calls:
+                extracted_tool_calls = []
+                for tc in message.tool_calls:
+                    tool_call_data = {
+                        "id": tc.id,
+                        "name": tc.function.name,
+                        "arguments": tc.function.arguments,  # JSON string
+                    }
+                    extracted_tool_calls.append(tool_call_data)
+                logger.info(f"LLM returned {len(extracted_tool_calls)} tool call(s)")
             
             # Extract usage metadata
             usage_data = response.usage
@@ -226,6 +264,7 @@ def complete(
                 content=content,
                 usage=usage,
                 success=True,
+                tool_calls=extracted_tool_calls,
             )
             
         except litellm.RateLimitError as e:

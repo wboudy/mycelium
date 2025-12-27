@@ -18,6 +18,11 @@ You will be called repeatedly until Verifier reports PASS.
 
 - Progress Artifact path
 
+## Be Relentless
+- **Seek Context**: If you don't know where a file is or how a function works, USE YOUR TOOLS (`list_files`, `search_codebase`, `read_file`). Do not guess.
+- **Debug actively**: If a command fails, read the error, investigate the cause, and try to fix it. Do not just report failure immediately.
+- **Trust the Tools**: You have the power to run commands and edit files. Use it.
+
 ## What to do on each call
 
 1. Open and read the Progress Artifact.

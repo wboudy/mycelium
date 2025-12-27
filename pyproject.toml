@@ -16,6 +16,9 @@ dependencies = [
     "litellm>=1.0",
 ]
 
+[project.scripts]
+mycelium-py = "mycelium.cli:main"
+
 [project.optional-dependencies]
 dev = [
     "ruff>=0.1.0",

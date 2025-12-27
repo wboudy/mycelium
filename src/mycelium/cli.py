@@ -3,8 +3,9 @@
 Mycelium CLI - Python-based orchestration commands.
 
 This module provides:
-- mycelium run <mission-path>: Run the current agent via LiteLLM
-- mycelium status <mission-path>: Show mission status with LLM usage
+- mycelium-py run <mission-path>: Run the current agent via LiteLLM
+- mycelium-py status <mission-path>: Show mission status with LLM usage
+- mycelium-py auto <mission-path>: Run agents in a loop until mission complete
 """
 
 from __future__ import annotations
@@ -140,6 +141,140 @@ def cmd_status(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_auto(args: argparse.Namespace) -> int:
+    """Execute auto-loop command - runs agents until mission complete or circuit breaker trips."""
+    import os
+    
+    from mycelium.orchestrator import get_usage_summary, load_progress, run_agent
+    
+    mission_path = Path(args.mission_path)
+    
+    if not mission_path.exists():
+        print(f"❌ Error: Path does not exist: {mission_path}", file=sys.stderr)
+        return 1
+    
+    # Configuration from args/env
+    max_iterations = args.max_iterations or int(os.environ.get("MYCELIUM_MAX_ITERATIONS", "10"))
+    max_cost = args.max_cost or float(os.environ.get("MYCELIUM_MAX_COST", "1.0"))
+    max_failures = args.max_failures or int(os.environ.get("MYCELIUM_MAX_FAILURES", "3"))
+    auto_approve = args.approve or os.environ.get("MYCELIUM_AUTO_APPROVE", "").lower() in ("1", "true", "yes")
+    
+    print(f"🔄 Auto mode for mission: {mission_path}")
+    print(f"   Max iterations: {max_iterations}")
+    print(f"   Max cost: ${max_cost:.2f}")
+    print(f"   Max failures: {max_failures}")
+    print(f"   Auto-approve: {auto_approve}")
+    print()
+    
+    # Loop state
+    iteration = 0
+    consecutive_failures = 0
+    cumulative_cost = 0.0
+    
+    while True:
+        # Load current progress
+        try:
+            progress = load_progress(mission_path)
+        except Exception as e:
+            print(f"❌ Error loading progress: {e}", file=sys.stderr)
+            return 1
+        
+        raw_agent = progress.get("current_agent", "")
+        if isinstance(raw_agent, dict):
+            # Handle case where LLM wrote a nested dict or object
+            # Attempt to find the value or just convert to string
+            # Common failure: current_agent: { current_agent: "implementer" }
+            if "current_agent" in raw_agent:
+                current_agent = str(raw_agent["current_agent"]).strip()
+            else:
+                # Just take the first value or stringify
+                current_agent = str(raw_agent).strip()
+        else:
+            current_agent = str(raw_agent).strip()
+        
+        # Check completion
+        if not current_agent:
+            print()
+            print("✅ Mission complete!")
+            break
+        
+        # Circuit breakers
+        if iteration >= max_iterations:
+            print()
+            print(f"⚠️  Max iterations ({max_iterations}) reached")
+            break
+        
+        if cumulative_cost >= max_cost:
+            print()
+            print(f"⚠️  Max cost (${max_cost:.2f}) exceeded - current: ${cumulative_cost:.4f}")
+            break
+        
+        if consecutive_failures >= max_failures:
+            print()
+            print(f"⚠️  Max consecutive failures ({max_failures}) reached")
+            break
+        
+        # HITL gate (if not auto-approved)
+        if not auto_approve:
+            print(f"\n🔵 Next agent: {current_agent} (iteration {iteration + 1}/{max_iterations})")
+            try:
+                response = input("Run this agent? [y/n/q]: ").strip().lower()
+            except (EOFError, KeyboardInterrupt):
+                print("\nAborted by user")
+                break
+            
+            if response == 'q':
+                print("Aborted by user")
+                break
+            if response != 'y':
+                print(f"Skipping {current_agent}")
+                consecutive_failures += 1
+                continue
+        
+        # Run agent
+        print("\n" + "=" * 50)
+        print(f"🔄 SWITCHING AGENT: {current_agent.upper()}")
+        print("=" * 50)
+        print(f"🚀 Running {current_agent} agent (iteration {iteration + 1}/{max_iterations})")
+        
+        response = run_agent(
+            mission_path=mission_path,
+            model=args.model,
+            auto_approve=True,  # HITL already checked above
+            enable_tools=not args.no_tools,
+        )
+        
+        # Track metrics
+        iteration += 1
+        
+        if response.success:
+            consecutive_failures = 0
+            cumulative_cost += response.usage.cost_usd
+            
+            print(f"   ✓ Tokens: {response.usage.total_tokens:,}")
+            print(f"   ✓ Cost: ${response.usage.cost_usd:.6f} (cumulative: ${cumulative_cost:.4f})")
+            
+            if args.verbose:
+                print(f"\n--- Output ---")
+                print(response.content[:500] + "..." if len(response.content) > 500 else response.content)
+                print(f"--- End ---\n")
+        else:
+            consecutive_failures += 1
+            print(f"   ✗ Failed: {response.error}")
+    
+    # Summary
+    print()
+    print("=" * 50)
+    print(f"📊 Auto mode complete after {iteration} iteration(s)")
+    
+    usage = get_usage_summary(mission_path)
+    if usage["runs"] > 0:
+        print(f"   Total tokens: {usage['total_tokens']:,}")
+        print(f"   Total cost: ${usage['total_cost_usd']:.6f}")
+    
+    return 0
+
+
 def main() -> int:
     """Main CLI entry point."""
     parser = argparse.ArgumentParser(
@@ -195,6 +330,51 @@ def main() -> int:
     )
     status_parser.set_defaults(func=cmd_status)
     
+    # auto command
+    auto_parser = subparsers.add_parser(
+        "auto",
+        help="Run agents in a loop until mission complete or circuit breaker trips",
+    )
+    auto_parser.add_argument(
+        "mission_path",
+        help="Path to mission directory or progress.yaml",
+    )
+    auto_parser.add_argument(
+        "--model", "-m",
+        help="Model to use (default: anthropic/claude-sonnet-4-20250514)",
+    )
+    auto_parser.add_argument(
+        "--max-iterations", "-n",
+        type=int,
+        help="Maximum number of agent iterations (default: 10)",
+    )
+    auto_parser.add_argument(
+        "--max-cost", "-c",
+        type=float,
+        help="Maximum cumulative cost in USD (default: 1.0)",
+    )
+    auto_parser.add_argument(
+        "--max-failures", "-f",
+        type=int,
+        help="Maximum consecutive failures before stopping (default: 3)",
+    )
+    auto_parser.add_argument(
+        "--approve", "-y",
+        action="store_true",
+        help="Auto-approve HITL gate for all agents",
+    )
+    auto_parser.add_argument(
+        "--no-tools",
+        action="store_true",
+        help="Disable tool calling (agents cannot read/write files)",
+    )
+    auto_parser.add_argument(
+        "-v", "--verbose",
+        action="store_true",
+        help="Show agent output after each iteration",
+    )
+    auto_parser.set_defaults(func=cmd_auto)
+    
     args = parser.parse_args()
     
     if not args.command:
@@ -210,3 +390,4 @@ def main() -> int:
 
 if __name__ == "__main__":
     sys.exit(main())
+

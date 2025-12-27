@@ -157,13 +157,35 @@ def _update_progress(mission_path: str, section: str, data: dict[str, Any]) -> d
     # Update the section
     if section == "current_agent":
         # Special case: current_agent is a string, not a dict
-        progress["current_agent"] = data.get("value", data) if isinstance(data, dict) else data
+        # Validation: Enforce string and handle LLM mistakes (nested dicts)
+        val = data.get("value", data) if isinstance(data, dict) else data
+        
+        if isinstance(val, dict):
+            # If still a dict, try to unwrap 'current_agent' key if it exists
+            # This handles: current_agent: { current_agent: "implementer" }
+            if "current_agent" in val:
+                val = val["current_agent"]
+            elif "value" in val:
+                val = val["value"]
+            # If strictly a dict with other keys, convert to str to allow human fixing, but warn
+            if isinstance(val, dict):
+                val = str(val)
+                
+        progress["current_agent"] = str(val).strip()
+        
     elif isinstance(progress.get(section), list) and isinstance(data, dict) and "append" in data:
         # Append to list sections (like implementer_log, verifier_report)
         progress[section].append(data["append"])
+        
     elif isinstance(progress.get(section), dict):
         # Merge dict sections
+        # Validation: Prevent recursive wrapping (e.g. scientist_plan: { scientist_plan: ... })
+        if isinstance(data, dict) and section in data and isinstance(data[section], dict):
+            # The LLM wrapped the update in the section key name. Unwrap it.
+            data = data[section]
+            
         progress[section].update(data)
+        
     else:
         # Replace section
         progress[section] = data
