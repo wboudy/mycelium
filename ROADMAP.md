@@ -1,5 +1,15 @@
 # Mycelium Roadmap
 
+There's a lot to be done. The mycelium wants to grow. More nodes, more tools, more automation:
+
+- **Improved Context Management**: Adding a "Historian" agent to track decisions across missions and improved state maintenance.
+- **Variable Model Routing**: Dynamically routing tasks—cheap models for verification, reasoning models for planning, and code models for implementation.
+- **LangGraph**: Porting the workflow to LangGraph to enable true graph-based state management and cyclic agent flows.
+    - **MCP**: Exposing Mycelium as an MCP server so agents can access repo externally. Make agents stronger via tool use.
+- **Prompt Engineering**: Implementing thinking protocols and few-shot tool use examples.
+
+More details [here](https://github.com/wboudy/mycelium).
+
 ---
 
 ## 🟢 Phase 1: Hardening
@@ -83,6 +93,19 @@ Comprehensive metrics requires Mycelium to sit in the request path:
 - [ ] Token counting from actual API request/response payloads
 - [ ] Per-model context window configuration
 - [ ] Auto-compression trigger when approaching limits
+
+---
+
+### 1.4 Prompt Engineering 🧠
+
+**Focus:** Implementing thinking protocols and few-shot tool use examples.
+
+**Goal:** Improve agent reliability and complex reasoning by enforcing structured thought processes before action.
+
+**Sub-tasks:**
+- [ ] Implement `<thinking>` blocks for reasoning steps
+- [ ] Create few-shot examples for complex tool usage
+- [ ] Integrate "chain of thought" prompting into base agent templates
 
 ---
 
