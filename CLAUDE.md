@@ -10,6 +10,26 @@ Mycelium is a multi-agent workflow framework for AI-assisted development emphasi
 - **Plan before code**: Scientist creates plan before Implementer codes
 - **Separation of concerns**: Each agent has specific capabilities and constraints
 
+## Plan Before Code (Enforced)
+
+**All new missions require planning before implementation.** Use `/plan` mode (or `EnterPlanMode`) before writing any code for:
+- New feature implementations
+- Architectural changes
+- Multi-file modifications
+- Any work that touches mission-critical paths
+
+This ensures the Scientist → Implementer flow is respected even in ad-hoc Claude Code sessions.
+
+## Stop Conditions
+
+Stop and ask the user if:
+- Requirements are ambiguous
+- A design or scope decision is needed
+- Failures are unclear or unexpected
+- Compute or resource scope expands significantly
+
+Do not proceed with assumptions. Clarify first.
+
 ## Commands
 
 ```bash
