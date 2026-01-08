@@ -3,8 +3,8 @@ name: mycelium-verifier
 description: >
   Verify implementation against Definition of Done. Use when checking if work is complete,
   when the user says "verify this", "check the implementation", "run verification",
-  or when progress.yaml shows current_agent is verifier.
-version: 1.0.0
+  or when a bead has the label "agent:verifier".
+version: 2.0.0
 author: mycelium
 allowed-tools:
   - Read
@@ -20,8 +20,8 @@ You MAY run commands. Only patch code if explicitly allowed.
 
 ## Follow
 
-- `.mycelium/CONTRACT.md` (includes shared state, handoff format, stop conditions)
-- Checklist mode from Progress Artifact (None | SMOKE | EXPERIMENT)
+- `CLAUDE.md` (project instructions)
+- Definition of Done from bead notes
 
 ## Be Skeptical & Thorough
 
@@ -31,21 +31,18 @@ You MAY run commands. Only patch code if explicitly allowed.
 
 ## Instructions
 
-1. **Read the Progress Artifact**
-2. **Review:** Scientist DoD + plan, latest Implementer iteration, current working command(s)
-3. **Verify DoD items:** PASS/FAIL + evidence
-4. **Re-run documented command(s)** when feasible
-5. **Try to break it:** Test edge cases, paths, defaults, missing deps, fresh-venv assumptions
-6. **If `test_mode` != NONE**, run all tests and record in `test_results`:
-   - Execute all test commands from `tests_run`
-   - Record each test with: test_name, status (PASS/FAIL/SKIP), output
-   - **Any test failure = FAIL** (for SMOKE and FULL modes)
+1. **Identify the current bead** - User provides bead ID, or find from `bd ready`
+2. **Read the bead** - Use `bd show <bead-id>` or read `.beads/issues.jsonl`
+3. **Review the plan** - Read DoD from bead notes
+4. **Verify each DoD item** - PASS/FAIL + evidence
+5. **Re-run documented command(s)** when feasible
+6. **Try to break it** - Test edge cases, defaults, missing deps
 
 ## Required Output
 
-Append **Verifier Report - Iteration N** section that includes:
+Add a **Verifier Report** to bead notes:
 - DoD checks (PASS/FAIL + evidence)
-- Commands re-run + results
+- Commands run + results
 - REQUIRED FIXES (blockers) as actionable checklist
 - Optional improvements
 
@@ -55,7 +52,7 @@ At the end of every Verifier Report, write exactly one of:
 
 **If ANY DoD item is FAIL or ANY REQUIRED FIXES remain:**
 ```
-Overall status: FAIL - rerun Implementer
+Overall status: FAIL - back to implementer
 ```
 
 **If ALL DoD items are PASS and REQUIRED FIXES is empty:**
@@ -63,22 +60,28 @@ Overall status: FAIL - rerun Implementer
 Overall status: PASS - ready for Maintainer
 ```
 
-## PASS Criteria
-
-When all DoD items are PASS, also include:
-- Single canonical command to run
-- Expected outputs (paths)
-
 ## Self-Sequencing
 
-Before completing, update `current_agent` field in the Progress Artifact:
+Before completing, update the bead's `agent:*` label:
 
 **If FAIL:**
-```yaml
-current_agent: "implementer"
+```python
+# Back to implementer
+labels = [l for l in labels if not l.startswith('agent:')]
+labels.append('agent:implementer')
 ```
 
 **If PASS:**
-```yaml
-current_agent: "maintainer"
+```python
+# Forward to maintainer
+labels = [l for l in labels if not l.startswith('agent:')]
+labels.append('agent:maintainer')
 ```
+
+## Output Format
+
+After updating the bead, summarize:
+- DoD items checked (count PASS/FAIL)
+- Commands run
+- Overall status: PASS or FAIL
+- Next agent

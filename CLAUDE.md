@@ -6,13 +6,21 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Mycelium is a multi-agent workflow framework for AI-assisted development emphasizing human oversight and auditability. Key principles:
 - **Human-gated handoffs (HITL)**: All agent transitions require explicit user approval
-- **Filesystem as state**: Progress stored in version-controlled `progress.yaml` files
-- **Plan before code**: Scientist creates plan before Implementer codes
+- **Beads as state**: Progress tracked via beads issue tracker with `agent:*` labels
+- **Plan before code**: Scientist creates plan before implementation
 - **Separation of concerns**: Each agent has specific capabilities and constraints
+
+## Non-negotiables
+
+- Prefer clarity over cleverness
+- Keep changes minimal and localized
+- No secrets, no large datasets or model weights committed
+- No new heavy dependencies without explicit approval
+- If you claim "it works," provide one exact command that reproduces it
 
 ## Plan Before Code (Enforced)
 
-**All new missions require planning before implementation.** Use `/plan` mode (or `EnterPlanMode`) before writing any code for:
+**All new work requires planning before implementation.** Use `/plan` mode (or `EnterPlanMode`) before writing any code for:
 - New feature implementations
 - Architectural changes
 - Multi-file modifications
@@ -47,64 +55,76 @@ pytest tests/test_orchestrator.py::test_func_name -v   # single test
 ruff check src/
 ruff format src/
 
-# Python CLI
-mycelium-py run <mission-path>                # run current agent
-mycelium-py run <mission-path> --approve      # skip HITL gate
-mycelium-py run <mission-path> --dry-run      # build prompt only
-mycelium-py status <mission-path> --verbose   # show LLM usage breakdown
-mycelium-py auto <mission-path> --approve     # auto-loop until complete
-
-# Bash CLI (prompt generation)
-.mycelium/bin/mycelium next [mission-path]    # generate prompt, copy to clipboard
-.mycelium/bin/mycelium list                   # list all missions
-.mycelium/bin/mycelium status <mission-path>
-
-# MCP server
-python -m mycelium.mcp
+# Issue tracking (beads)
+bd ready                    # find unblocked work
+bd show <bead-id>          # show bead details
+bd create "Title"          # create new bead
+bd close <bead-id>         # close completed bead
+bd sync                    # sync with git remote
 ```
 
 ## Architecture
 
 ### Agent Flow
 
-Mission agents execute in sequence: **Scientist** → **Implementer** → **Verifier** → **Maintainer**
+Agents execute in sequence: **Scientist** → **Implementer** → **Verifier** → **Maintainer**
 
 | Agent | Role | Code Access |
 |-------|------|-------------|
-| Scientist | Creates falsifiable plan from mission context | Read-only |
+| Scientist | Creates falsifiable plan from bead context | Read-only |
 | Implementer | Executes plan, writes code/tests | Read/write |
 | Verifier | Validates Definition of Done | Run tests only |
 | Maintainer | Cleanup, commit message | Refactor only |
 
-Standalone: **Mission Organizer** (natural language → mission setup), **Repo Maintainer** (repo-wide cleanup)
+Agent state is tracked via bead labels: `agent:scientist`, `agent:implementer`, `agent:verifier`, `agent:maintainer`
 
-### Mission State
+### Workflow Skills
 
-Single source of truth: `.mycelium/missions/<mission-id>/progress.yaml`
-- `current_agent`: Which agent runs next (empty = complete)
-- `mission_context`: Objective, scope, constraints, `test_mode` (NONE/SMOKE/FULL)
-- `scientist_plan`: Definition of Done, plan steps, risks
-- `implementer_log`: Array of iteration records
-- `verifier_report`: DoD check results
-- `llm_usage`: Token counts and costs per run
+- `/mycelium-scientist` - Create plan from bead context
+- `/mycelium-verifier` - Verify implementation against DoD
+- `/mycelium-maintainer` - Cleanup and finalize
+- `/mycelium-next` - Orchestrate next agent based on bead label
+- `/mycelium-onboard` - Show current project status
 
-### MCP Tools
+### Bead State
 
-7 tools: `read_progress`, `update_progress`, `list_files`, `read_file`, `write_file`, `run_command`, `search_codebase`
+Single source of truth: `.beads/issues.jsonl`
+- Bead `labels` array contains `agent:*` for current workflow state
+- Bead `notes` field contains scientist plan and verifier reports
+- Bead `description` contains mission context
 
-Write and command execution require HITL approval (bypass via `MYCELIUM_HITL_AUTO_APPROVE=1`).
+## Python Environment
+
+- This repo uses a project-local virtual environment at `.venv/`
+- All Python commands should assume `.venv` is activated
+- Do not install packages globally
+- If new Python dependencies are required:
+  - Add them to `requirements.txt` or `pyproject.toml`
+  - Note the change in a bead comment
+
+## Testing
+
+Testing guidelines by scope:
+
+| Scope | When to Use | Requirements |
+|-------|-------------|--------------|
+| **NONE** | Exploratory, throwaway, or documentation-only | No tests required |
+| **SMOKE** | Features that should work reliably | Basic sanity tests |
+| **FULL** | Production-ready, critical infrastructure | Comprehensive tests with edge cases |
+
+**Guidelines:**
+- Default is NONE — explicitly upgrade based on work persistence
+- Tests complement DoD verification; they don't replace it
+- Verifier runs all tests; any failure = FAIL
 
 ## Environment Variables
 
 | Variable | Purpose | Default |
 |----------|---------|---------|
 | `ANTHROPIC_API_KEY` | Required for Claude models | - |
-| `MYCELIUM_MODEL` | LLM model override | `anthropic/claude-sonnet-4-20250514` |
-| `MYCELIUM_AUTO_APPROVE` | Skip HITL gate (1/true/yes) | disabled |
 
 ## Key Files
 
-- `.mycelium/CONTRACT.md`: Global rules, constraints, LLM retry logic (3 retries, exponential backoff)
-- `.mycelium/WORKFLOW.md`: 6-step mission lifecycle documentation
-- `.mycelium/agents/mission/*.md`: Agent prompt templates (scientist, implementer, verifier, maintainer)
-- `.mycelium/missions/PROGRESS_TEMPLATE.yaml`: Schema for progress.yaml artifacts
+- `CLAUDE.md`: Project instructions (this file)
+- `.beads/issues.jsonl`: Issue tracker data
+- `.claude/skills/mycelium-*/SKILL.md`: Agent skill definitions
