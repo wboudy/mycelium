@@ -10,6 +10,7 @@ Supports Anthropic, OpenAI, and Google via environment variables:
 
 from __future__ import annotations
 
+import json
 import logging
 import math
 import os
@@ -149,6 +150,45 @@ def _coerce_non_negative_int(value: Any) -> int:
     return int(parsed)
 
 
+def _normalize_tool_call(raw_tool_call: Any, fallback_index: int) -> dict[str, Any] | None:
+    """Normalize a single provider tool-call payload."""
+    if isinstance(raw_tool_call, dict):
+        raw_id = raw_tool_call.get("id")
+        raw_function = raw_tool_call.get("function")
+    else:
+        raw_id = getattr(raw_tool_call, "id", None)
+        raw_function = getattr(raw_tool_call, "function", None)
+
+    if isinstance(raw_function, dict):
+        raw_name = raw_function.get("name")
+        raw_arguments = raw_function.get("arguments")
+    else:
+        raw_name = getattr(raw_function, "name", None)
+        raw_arguments = getattr(raw_function, "arguments", None)
+
+    if not isinstance(raw_name, str):
+        return None
+    name = raw_name.strip()
+    if not name:
+        return None
+
+    call_id = str(raw_id).strip() if raw_id is not None else ""
+    if not call_id:
+        call_id = f"tool_call_{fallback_index}"
+
+    if raw_arguments is None:
+        arguments = "{}"
+    elif isinstance(raw_arguments, str):
+        arguments = raw_arguments
+    else:
+        try:
+            arguments = json.dumps(raw_arguments)
+        except (TypeError, ValueError):
+            arguments = str(raw_arguments)
+
+    return {"id": call_id, "name": name, "arguments": arguments}
+
+
 def complete(
     messages: list[dict[str, Any]],
     model: str = DEFAULT_MODEL,
@@ -251,16 +291,24 @@ def complete(
             
             # Extract tool calls if present
             extracted_tool_calls = None
-            if hasattr(message, "tool_calls") and message.tool_calls:
-                extracted_tool_calls = []
-                for tc in message.tool_calls:
-                    tool_call_data = {
-                        "id": tc.id,
-                        "name": tc.function.name,
-                        "arguments": tc.function.arguments,  # JSON string
-                    }
-                    extracted_tool_calls.append(tool_call_data)
-                logger.info(f"LLM returned {len(extracted_tool_calls)} tool call(s)")
+            raw_tool_calls = getattr(message, "tool_calls", None)
+            if raw_tool_calls:
+                if isinstance(raw_tool_calls, list):
+                    tool_call_items = raw_tool_calls
+                else:
+                    tool_call_items = [raw_tool_calls]
+
+                normalized_tool_calls = []
+                for idx, raw_tool_call in enumerate(tool_call_items, start=1):
+                    normalized = _normalize_tool_call(raw_tool_call, idx)
+                    if normalized:
+                        normalized_tool_calls.append(normalized)
+                    else:
+                        logger.warning(f"Skipping malformed tool call payload: {raw_tool_call!r}")
+
+                if normalized_tool_calls:
+                    extracted_tool_calls = normalized_tool_calls
+                    logger.info(f"LLM returned {len(extracted_tool_calls)} tool call(s)")
             
             # Extract usage metadata
             usage_data = getattr(response, "usage", None)
