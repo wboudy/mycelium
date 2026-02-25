@@ -213,6 +213,53 @@ class TestComplete:
         assert response.success is True
         assert call_count[0] == 3  # Two failures + one success
 
+    def test_coerces_string_usage_fields(self):
+        """String usage fields should be coerced to non-negative ints."""
+        mock_response = MagicMock()
+        mock_response.choices = [MagicMock()]
+        mock_response.choices[0].message.content = "Test response"
+        mock_response.usage.prompt_tokens = "100"
+        mock_response.usage.completion_tokens = "50"
+        mock_response.usage.total_tokens = "175"
+
+        with patch.dict("os.environ", {"ANTHROPIC_API_KEY": "sk-test"}):
+            with patch("mycelium.llm.litellm.completion", return_value=mock_response):
+                with patch("mycelium.llm._calculate_cost", return_value=0.005) as mock_cost:
+                    response = complete(
+                        messages=[{"role": "user", "content": "Hello"}],
+                        model="anthropic/claude-sonnet-4-20250514",
+                    )
+
+        assert response.success is True
+        assert response.usage.prompt_tokens == 100
+        assert response.usage.completion_tokens == 50
+        assert response.usage.total_tokens == 175
+        mock_cost.assert_called_once_with("anthropic/claude-sonnet-4-20250514", 100, 50)
+
+    def test_clamps_invalid_usage_and_cost(self):
+        """Malformed usage/cost values should clamp to safe numeric defaults."""
+        mock_response = MagicMock()
+        mock_response.choices = [MagicMock()]
+        mock_response.choices[0].message.content = "Test response"
+        mock_response.usage.prompt_tokens = "-9"
+        mock_response.usage.completion_tokens = float("nan")
+        mock_response.usage.total_tokens = "not-a-number"
+
+        with patch.dict("os.environ", {"ANTHROPIC_API_KEY": "sk-test"}):
+            with patch("mycelium.llm.litellm.completion", return_value=mock_response):
+                with patch("mycelium.llm._calculate_cost", side_effect=RuntimeError("boom")) as mock_cost:
+                    response = complete(
+                        messages=[{"role": "user", "content": "Hello"}],
+                        model="anthropic/claude-sonnet-4-20250514",
+                    )
+
+        assert response.success is True
+        assert response.usage.prompt_tokens == 0
+        assert response.usage.completion_tokens == 0
+        assert response.usage.total_tokens == 0
+        assert response.usage.cost_usd == 0.0
+        mock_cost.assert_called_once_with("anthropic/claude-sonnet-4-20250514", 0, 0)
+
     def test_no_retry_on_auth_error(self):
         """Does not retry on authentication errors."""
         import litellm

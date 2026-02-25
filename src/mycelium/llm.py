@@ -11,6 +11,7 @@ Supports Anthropic, OpenAI, and Google via environment variables:
 from __future__ import annotations
 
 import logging
+import math
 import os
 import time
 from dataclasses import dataclass, field
@@ -125,6 +126,29 @@ def _verify_api_keys() -> list[str]:
     return available
 
 
+def _coerce_non_negative_int(value: Any) -> int:
+    """Coerce int/float-like values to non-negative ints."""
+    if value is None or isinstance(value, bool):
+        return 0
+
+    if isinstance(value, (int, float)):
+        parsed = float(value)
+    elif isinstance(value, str):
+        stripped = value.strip()
+        if not stripped:
+            return 0
+        try:
+            parsed = float(stripped)
+        except ValueError:
+            return 0
+    else:
+        return 0
+
+    if not math.isfinite(parsed) or parsed < 0:
+        return 0
+    return int(parsed)
+
+
 def complete(
     messages: list[dict[str, Any]],
     model: str = DEFAULT_MODEL,
@@ -202,7 +226,6 @@ def complete(
             completion_kwargs = {
                 "model": model,
                 "messages": messages,
-                "messages": messages,
                 "max_tokens": max_tokens,
             }
             
@@ -240,13 +263,21 @@ def complete(
                 logger.info(f"LLM returned {len(extracted_tool_calls)} tool call(s)")
             
             # Extract usage metadata
-            usage_data = response.usage
-            prompt_tokens = getattr(usage_data, "prompt_tokens", 0) or 0
-            completion_tokens = getattr(usage_data, "completion_tokens", 0) or 0
-            total_tokens = prompt_tokens + completion_tokens
+            usage_data = getattr(response, "usage", None)
+            prompt_tokens = _coerce_non_negative_int(getattr(usage_data, "prompt_tokens", 0))
+            completion_tokens = _coerce_non_negative_int(getattr(usage_data, "completion_tokens", 0))
+            reported_total_tokens = _coerce_non_negative_int(getattr(usage_data, "total_tokens", 0))
+            total_tokens = reported_total_tokens or (prompt_tokens + completion_tokens)
             
             # Calculate cost
-            cost_usd = _calculate_cost(model, prompt_tokens, completion_tokens)
+            try:
+                cost_usd = _calculate_cost(model, prompt_tokens, completion_tokens)
+            except Exception as e:
+                logger.warning(f"Cost calculation failed for {model}: {e}")
+                cost_usd = 0.0
+
+            if not isinstance(cost_usd, (int, float)) or not math.isfinite(cost_usd) or cost_usd < 0:
+                cost_usd = 0.0
             
             usage = UsageMetadata(
                 prompt_tokens=prompt_tokens,
