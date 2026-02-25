@@ -69,6 +69,7 @@ def load_progress(mission_path: Path) -> dict[str, Any]:
     Raises:
         FileNotFoundError: If progress.yaml doesn't exist.
         yaml.YAMLError: If YAML parsing fails.
+        ValueError: If YAML root is not a mapping/object.
     """
     if mission_path.suffix == ".yaml":
         progress_file = mission_path
@@ -79,7 +80,18 @@ def load_progress(mission_path: Path) -> dict[str, Any]:
         raise FileNotFoundError(f"progress.yaml not found at: {progress_file}")
     
     with open(progress_file) as f:
-        return yaml.safe_load(f)
+        loaded = yaml.safe_load(f)
+
+    # Empty YAML is valid; treat it as an empty progress object.
+    if loaded is None:
+        return {}
+
+    if not isinstance(loaded, dict):
+        raise ValueError(
+            f"Invalid progress.yaml format at {progress_file}: expected YAML mapping/object root"
+        )
+
+    return loaded
 
 
 def save_progress(mission_path: Path, progress: dict[str, Any]) -> None:
@@ -192,7 +204,7 @@ def _coerce_labels(raw_labels: Any) -> set[str]:
 
     if isinstance(raw_labels, str):
         for label in raw_labels.replace(",", " ").split():
-            normalized = label.strip()
+            normalized = label.strip().lower()
             if normalized:
                 labels.add(normalized)
         return labels
@@ -378,6 +390,8 @@ def run_agent(
         return CompletionResponse(success=False, error=str(e))
     except yaml.YAMLError as e:
         return CompletionResponse(success=False, error=f"YAML parse error: {e}")
+    except ValueError as e:
+        return CompletionResponse(success=False, error=f"YAML format error: {e}")
     
     # Get current agent
     raw_agent = progress.get("current_agent", "")
@@ -585,7 +599,7 @@ def get_usage_summary(mission_path: str | Path) -> dict[str, Any]:
     
     try:
         progress = load_progress(mission_path)
-    except (FileNotFoundError, yaml.YAMLError):
+    except (FileNotFoundError, yaml.YAMLError, ValueError):
         return {"total_tokens": 0, "total_cost_usd": 0.0, "runs": 0}
     
     llm_usage = progress.get("llm_usage", {})

@@ -103,6 +103,23 @@ class TestLoadProgress:
         with pytest.raises(FileNotFoundError):
             load_progress(tmp_path / "nonexistent")
 
+    def test_empty_yaml_returns_empty_dict(self, temp_mission):
+        """Empty YAML should be normalized to an empty progress object."""
+        progress_file = temp_mission / "progress.yaml"
+        progress_file.write_text("")
+
+        progress = load_progress(progress_file)
+
+        assert progress == {}
+
+    def test_non_mapping_yaml_raises_value_error(self, temp_mission):
+        """Non-mapping YAML roots are rejected with a clear error."""
+        progress_file = temp_mission / "progress.yaml"
+        progress_file.write_text("- item1\n- item2\n")
+
+        with pytest.raises(ValueError, match="expected YAML mapping/object root"):
+            load_progress(progress_file)
+
 
 class TestAppendLlmUsage:
     """Tests for append_llm_usage function."""
@@ -217,10 +234,10 @@ class TestModelRouting:
     def test_extract_routing_labels_handles_mixed_shapes(self):
         """Label extractor normalizes list/string/dict forms into a stable set."""
         progress = {
-            "labels": "agent:scientist, model:deep",
+            "labels": " agent:Scientist,   model:deep ",
             "mission_context": {
-                "labels": ["needs:orchestrator", {"label": "model:deep"}],
-                "bead_labels": "interrupt root-cause",
+                "labels": ["needs:orchestrator", {"label": "Model:Deep"}],
+                "bead_labels": "interrupt ROOT-CAUSE",
             },
             "routing": {"label": "model:deep"},
         }
@@ -279,11 +296,11 @@ class TestModelRouting:
         assert source == "model:deep:MYCELIUM_DEEP_MODEL"
 
     def test_resolve_model_deep_from_string_labels(self, monkeypatch):
-        """Comma/space-delimited string labels still route correctly."""
+        """Comma/space-delimited labels route correctly even with mixed case."""
         monkeypatch.delenv("MYCELIUM_MODEL", raising=False)
         monkeypatch.delenv("MYCELIUM_MODEL_DEEP", raising=False)
         monkeypatch.delenv("MYCELIUM_DEEP_MODEL", raising=False)
-        progress = {"labels": "interrupt,root-cause model:deep"}
+        progress = {"labels": " interrupt,ROOT-CAUSE   Model:Deep "}
 
         model, source = resolve_model_for_run(progress, None)
 
@@ -377,6 +394,17 @@ class TestRunAgent:
         assert response.success is True
         assert "DRY RUN" in response.content
         assert "scientist" in response.content
+
+    def test_invalid_progress_yaml_root_returns_error(self, temp_mission):
+        """run_agent returns a clear error when progress root is not a mapping."""
+        progress_file = temp_mission / "progress.yaml"
+        progress_file.write_text("- not-a-mapping\n")
+
+        response = run_agent(temp_mission)
+
+        assert response.success is False
+        assert response.error is not None
+        assert "YAML format error" in response.error
 
 
 class TestCliHelp:
