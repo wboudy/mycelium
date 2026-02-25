@@ -68,8 +68,8 @@ def _normalize_agent_value(raw_agent: Any) -> str:
     return _normalize(raw_agent, allow_fallback_stringify=True)
 
 
-def _get_current_agent(mission_path: str) -> str:
-    """Get current_agent from progress.yaml."""
+def _get_current_agent(mission_path: str) -> str | None:
+    """Get normalized current_agent from progress.yaml, or None if unreadable."""
     progress_file = Path(mission_path)
     if progress_file.is_dir():
         progress_file = progress_file / "progress.yaml"
@@ -80,9 +80,11 @@ def _get_current_agent(mission_path: str) -> str:
     try:
         with open(progress_file) as f:
             progress = yaml.safe_load(f) or {}
+        if not isinstance(progress, dict):
+            return None
         return _normalize_agent_value(progress.get("current_agent", ""))
     except Exception:
-        return ""
+        return None
 
 
 def _requires_approval(mission_path: str | None = None, auto_approve: bool = False) -> tuple[bool, str]:
@@ -97,6 +99,8 @@ def _requires_approval(mission_path: str | None = None, auto_approve: bool = Fal
     
     if mission_path:
         current_agent = _get_current_agent(mission_path)
+        if current_agent is None:
+            return True, "unable to determine current_agent"
         if current_agent == "implementer":
             return True, "current_agent is implementer"
     

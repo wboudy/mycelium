@@ -420,6 +420,25 @@ class TestWriteFile:
         assert result["approval_required"] is True
         assert not target.exists()
 
+    def test_write_requires_approval_when_current_agent_unreadable(self, temp_dir):
+        """Unreadable progress state should fail closed and require approval."""
+        mission_dir = temp_dir / "mission"
+        mission_dir.mkdir()
+        (mission_dir / "progress.yaml").write_text("current_agent: [broken\n")
+
+        target = temp_dir / "unreadable-guard.txt"
+        result = write_file(
+            str(target),
+            "blocked",
+            mission_path=str(mission_dir),
+            auto_approve=False,
+        )
+
+        assert result["success"] is False
+        assert result["approval_required"] is True
+        assert result["reason"] == "unable to determine current_agent"
+        assert not target.exists()
+
 
 # =============================================================================
 # Tests: run_command
@@ -505,6 +524,23 @@ class TestRunCommand:
 
         assert result["success"] is False
         assert result["approval_required"] is True
+
+    def test_run_requires_approval_when_current_agent_unreadable(self, temp_dir):
+        """Unreadable progress state should fail closed and require approval."""
+        mission_dir = temp_dir / "mission"
+        mission_dir.mkdir()
+        (mission_dir / "progress.yaml").write_text("current_agent: [broken\n")
+
+        result = run_command(
+            "echo 'should not run'",
+            cwd=str(temp_dir),
+            mission_path=str(mission_dir),
+            auto_approve=False,
+        )
+
+        assert result["success"] is False
+        assert result["approval_required"] is True
+        assert result["reason"] == "unable to determine current_agent"
 
 
 # =============================================================================
