@@ -1,5 +1,5 @@
 # Orchestrator Handoff and Escalation Spec
-Version: 0.3
+Version: 0.4
 Status: Draft
 
 ## 1. Purpose
@@ -177,6 +177,9 @@ watcher_run:
   error_class: <optional>
   policy_version: <optional-policy-hash>
   replay_artifact: <optional-run-file-path>
+  capsule_artifact: <optional-repro-capsule-path>
+  risk_budget_decision: <optional-allow|defer|bypass-critical>
+  signature_trust_score: <optional-0-to-1>
   timestamp: <ISO-8601 UTC>
 ```
 
@@ -194,6 +197,9 @@ watcher_run:
 10. Watcher policy is loaded from versioned config and passes static validation before startup.
 11. Any executed handoff attempt is replayable in deterministic dry-run mode.
 12. Daily digest includes incident clusters with blast-radius ordering.
+13. Failed or escalated handoffs include a sanitized reproducibility capsule.
+14. Human escalation flow respects configurable daily risk budget with critical bypass.
+15. Model-routing decisions incorporate signature trust history and are auditable.
 
 ## 12. Out of Scope (This Spec)
 
@@ -304,6 +310,35 @@ The following three additions were selected after evaluating ten candidates.
    - Daily digest ordering:
      - cluster risk first (priority, spread, age, human impact)
 
+### 14.5 Selected Enhancements (Top 3, New Iteration)
+
+1. Reproducibility capsule generator.
+   - For every failure or escalation, persist a sanitized capsule:
+     - `.beads/orchestrator-capsules/<handoff_key>/<attempt>.md`
+   - Capsule must include:
+     - minimal reproduction steps
+     - observed vs expected behavior
+     - exact command envelope and key logs
+     - environment metadata (timezone, policy hash, run id)
+   - Capsule path is recorded in `watcher_run.capsule_artifact`.
+2. Daily human risk-budget governor.
+   - Add policy knobs:
+     - `max_noncritical_escalations_per_day`
+     - `max_noncritical_pages_per_hour`
+   - Decision rules:
+     - critical (`P0/P1` or `customer-impact`) always bypass budget
+     - noncritical over-budget items are deferred to digest queue
+   - Decision is recorded in `watcher_run.risk_budget_decision`.
+3. Signature trust ledger for routing.
+   - Persist per-signature historical outcomes:
+     - auto-resolve success rate
+     - mean retries
+     - human-escalation rate
+   - Use score to route:
+     - high trust => cheaper/shallower path first
+     - low trust => deep model earlier + stricter guardrails
+   - Score is recorded in `watcher_run.signature_trust_score`.
+
 ## 15. Failure Modes and Mitigation Plan
 
 ### 15.1 Two Watchers Claim Same Bead
@@ -408,3 +443,6 @@ The following three additions were selected after evaluating ten candidates.
 9. Policy verifier rejects contradictory or unreachable rule sets.
 10. Replay harness reproduces identical transitions under deterministic inputs.
 11. Incident-cluster digest groups related signatures and ranks by blast radius.
+12. Reproducibility capsule generation validates completeness and redaction rules.
+13. Risk-budget governor enforces quotas while always allowing critical bypass.
+14. Signature trust ledger updates deterministically and changes routing as expected.
