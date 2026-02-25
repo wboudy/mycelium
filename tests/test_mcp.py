@@ -121,6 +121,14 @@ class TestReadProgress:
         result = read_progress(str(temp_dir))
         assert result == {}
 
+    def test_read_non_mapping_root_raises_value_error(self, temp_dir):
+        """read_progress rejects non-mapping YAML roots for contract stability."""
+        progress_file = temp_dir / "progress.yaml"
+        progress_file.write_text("- not-a-mapping\n")
+
+        with pytest.raises(ValueError, match="expected YAML mapping/object root"):
+            read_progress(str(temp_dir))
+
 
 # =============================================================================
 # Tests: update_progress

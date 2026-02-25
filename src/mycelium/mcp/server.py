@@ -138,6 +138,8 @@ def _read_progress(mission_path: str) -> dict[str, Any]:
             content = yaml.safe_load(f)
             if content is None:
                 return {}
+            if not isinstance(content, dict):
+                raise ValueError("Invalid progress.yaml format: expected YAML mapping/object root")
             return content
     except yaml.YAMLError as e:
         raise ValueError(f"Failed to parse YAML: {e}")
