@@ -1,0 +1,129 @@
+# APR Workflow Configuration
+# Generated: 2026-02-25T01:35:49Z
+
+name: mycelium_spec
+description: "Mycelium Agentic Knowledge Vault spec workflow"
+
+documents:
+  readme: "TARGET_VISION.md"
+  spec: "SPEC.md"
+  implementation: "CURRENT_STATE.md"
+
+oracle:
+  model: "5.2 Thinking"
+  thinking_time: heavy
+
+rounds:
+  output_dir: ".apr/rounds/mycelium_spec"
+
+template: |
+  First, read this TARGET_VISION document (README slot):
+
+  ```
+  <contents of README will be included by oracle>
+  ```
+
+  ---
+
+  Then read the current working SPEC seed:
+
+  ```
+  <contents of spec will be included by oracle>
+  ```
+
+  ---
+
+  And treat this CURRENT_STATE implementation/context document as canonical implementation state:
+
+  ```
+  <contents of implementation will be included by oracle>
+  ```
+
+  ---
+
+  GLOBAL RULES (apply to this round):
+  - Output ONLY the spec document (no commentary, no rationale, no meta).
+  - Use normative language: MUST / SHOULD / MAY.
+  - Every MUST requirement must have acceptance criteria (testable).
+  - No repetition: consolidate; define each term once; use a Glossary.
+  - If information is missing, write explicit TODO questions (do NOT handwave).
+  - Do not invent repo-specific details not present in CURRENT_STATE.md.
+  - Prefer structured lists/tables over long prose.
+
+  ROUND 1 TASK (Canonical Draft):
+  Using TARGET_VISION.md and CURRENT_STATE.md, produce a complete implementation-grade SPEC for “Mycelium Agentic Knowledge Vault”.
+
+  REQUIRED CONTENT:
+  - Coherent section hierarchy.
+  - Include at minimum:
+    - Glossary
+    - Goals / Non-Goals
+    - Scope
+    - Personas / Use Cases (ingest, navigate, delta, frontier, graduate)
+    - Functional Requirements
+    - Non-Functional Requirements
+    - System Architecture (high-level components)
+    - Data Model (note types, metadata, delta report)
+    - Interfaces (CLI/commands, file layout, ingestion inputs)
+    - Governance (human canon, agent draft/review)
+    - Risks & Open Questions
+    - Acceptance Criteria (initial)
+
+  OUTPUT REQUIREMENT:
+  - Output ONLY the SPEC document.
+
+template_with_impl: |
+  First, read this TARGET_VISION document (README slot):
+
+  ```
+  <contents of README will be included by oracle>
+  ```
+
+  ---
+
+  Then read the current working SPEC seed:
+
+  ```
+  <contents of spec will be included by oracle>
+  ```
+
+  ---
+
+  And treat this CURRENT_STATE implementation/context document as canonical implementation state:
+
+  ```
+  <contents of implementation will be included by oracle>
+  ```
+
+  ---
+
+  GLOBAL RULES (apply to this round):
+  - Output ONLY the spec document (no commentary, no rationale, no meta).
+  - Use normative language: MUST / SHOULD / MAY.
+  - Every MUST requirement must have acceptance criteria (testable).
+  - No repetition: consolidate; define each term once; use a Glossary.
+  - If information is missing, write explicit TODO questions (do NOT handwave).
+  - Do not invent repo-specific details not present in CURRENT_STATE.md.
+  - Prefer structured lists/tables over long prose.
+
+  ROUND 1 TASK (Canonical Draft):
+  Using TARGET_VISION.md and CURRENT_STATE.md, produce a complete implementation-grade SPEC for “Mycelium Agentic Knowledge Vault”.
+
+  REQUIRED CONTENT:
+  - Coherent section hierarchy.
+  - Include at minimum:
+    - Glossary
+    - Goals / Non-Goals
+    - Scope
+    - Personas / Use Cases (ingest, navigate, delta, frontier, graduate)
+    - Functional Requirements
+    - Non-Functional Requirements
+    - System Architecture (high-level components)
+    - Data Model (note types, metadata, delta report)
+    - Interfaces (CLI/commands, file layout, ingestion inputs)
+    - Governance (human canon, agent draft/review)
+    - Risks & Open Questions
+    - Acceptance Criteria (initial)
+
+  OUTPUT REQUIREMENT:
+  - Output ONLY the SPEC document.
