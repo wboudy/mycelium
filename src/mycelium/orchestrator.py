@@ -20,7 +20,7 @@ from typing import Any
 
 import yaml
 
-from mycelium.llm import CompletionResponse, complete
+from mycelium.llm import DEFAULT_MODEL, CompletionResponse, complete
 
 logger = logging.getLogger(__name__)
 
@@ -29,6 +29,11 @@ VALID_AGENTS = {"scientist", "implementer", "verifier", "maintainer"}
 
 # Agents that require HITL approval before execution
 REQUIRES_APPROVAL = {"implementer"}
+
+# Routing labels and model defaults for bug-interrupt handoffs.
+DEEP_MODEL_LABEL = "model:deep"
+DEEP_MODEL_ENV_KEYS = ("MYCELIUM_MODEL_DEEP", "MYCELIUM_DEEP_MODEL")
+DEFAULT_DEEP_MODEL = "openai/gpt-5"
 
 
 def find_repo_root(start_path: Path | None = None) -> Path | None:
@@ -179,6 +184,75 @@ Current agent: {progress.get('current_agent', agent_role)}
         {"role": "system", "content": system_content},
         {"role": "user", "content": user_content},
     ]
+
+
+def _coerce_labels(raw_labels: Any) -> set[str]:
+    """Normalize various label shapes (string/list/dict) into a set of strings."""
+    labels: set[str] = set()
+
+    if isinstance(raw_labels, str):
+        for label in raw_labels.replace(",", " ").split():
+            normalized = label.strip()
+            if normalized:
+                labels.add(normalized)
+        return labels
+
+    if isinstance(raw_labels, (list, tuple, set)):
+        for item in raw_labels:
+            labels.update(_coerce_labels(item))
+        return labels
+
+    if isinstance(raw_labels, dict):
+        labels.update(_coerce_labels(raw_labels.get("labels")))
+        labels.update(_coerce_labels(raw_labels.get("label")))
+
+    return labels
+
+
+def extract_routing_labels(progress: dict[str, Any]) -> set[str]:
+    """
+    Extract bead-routing labels from common progress.yaml sections.
+
+    This keeps routing resilient to minor schema differences across skills.
+    """
+    labels: set[str] = set()
+    labels.update(_coerce_labels(progress.get("labels")))
+
+    mission_context = progress.get("mission_context")
+    if isinstance(mission_context, dict):
+        labels.update(_coerce_labels(mission_context.get("labels")))
+        labels.update(_coerce_labels(mission_context.get("bead_labels")))
+
+    for section_name in ("bead", "issue", "handoff", "orchestrator", "routing"):
+        section = progress.get(section_name)
+        if isinstance(section, dict):
+            labels.update(_coerce_labels(section.get("labels")))
+            labels.update(_coerce_labels(section.get("label")))
+
+    return labels
+
+
+def resolve_model_for_run(progress: dict[str, Any], model_override: str | None) -> tuple[str, str]:
+    """
+    Resolve which model to use for this run.
+
+    Precedence:
+    1. Explicit CLI/API override
+    2. model:deep routing for bug beads
+    3. Standard MYCELIUM_MODEL/default model
+    """
+    if model_override:
+        return model_override, "override"
+
+    routing_labels = extract_routing_labels(progress)
+    if DEEP_MODEL_LABEL in routing_labels:
+        for env_key in DEEP_MODEL_ENV_KEYS:
+            configured = os.environ.get(env_key, "").strip()
+            if configured:
+                return configured, f"{DEEP_MODEL_LABEL}:{env_key}"
+        return DEFAULT_DEEP_MODEL, f"{DEEP_MODEL_LABEL}:default"
+
+    return os.environ.get("MYCELIUM_MODEL", DEFAULT_MODEL), "default"
 
 
 def append_llm_usage(
@@ -348,10 +422,8 @@ def run_agent(
             error=f"Execution not approved for {current_agent}. Use --approve flag to bypass.",
         )
     
-    # Call LLM with optional tool support
-    from mycelium.llm import DEFAULT_MODEL
-    
-    effective_model = model or os.environ.get("MYCELIUM_MODEL", DEFAULT_MODEL)
+    # Resolve model with optional deep-routing policy for bug beads.
+    effective_model, model_source = resolve_model_for_run(progress, model)
     
     # Get tools if enabled
     tools = None
@@ -363,7 +435,12 @@ def run_agent(
         except ImportError as e:
             logger.warning(f"Could not import tools module: {e}")
     
-    logger.info(f"Running {current_agent} agent with model {effective_model}")
+    logger.info(
+        "Running %s agent with model %s (source=%s)",
+        current_agent,
+        effective_model,
+        model_source,
+    )
     
     # Tool execution loop
     max_tool_iterations = 20

@@ -16,15 +16,17 @@ import pytest
 import yaml
 
 from mycelium.orchestrator import (
+    DEFAULT_DEEP_MODEL,
     REQUIRES_APPROVAL,
     VALID_AGENTS,
     append_llm_usage,
     check_hitl_approval,
+    resolve_model_for_run,
     get_usage_summary,
     load_progress,
     run_agent,
 )
-from mycelium.llm import CompletionResponse, UsageMetadata
+from mycelium.llm import CompletionResponse, DEFAULT_MODEL, UsageMetadata
 
 
 @pytest.fixture
@@ -206,6 +208,87 @@ class TestGetUsageSummary:
         assert summary["total_tokens"] == 3000
         assert summary["total_cost_usd"] == 0.09
         assert summary["runs"] == 2
+
+
+class TestModelRouting:
+    """Tests for model routing policy in orchestrator."""
+
+    def test_resolve_model_override_wins(self, monkeypatch):
+        """Explicit model override takes precedence over all routing signals."""
+        monkeypatch.setenv("MYCELIUM_MODEL", "anthropic/claude-sonnet-4-20250514")
+        monkeypatch.setenv("MYCELIUM_MODEL_DEEP", "anthropic/claude-opus-4-1")
+        progress = {"mission_context": {"labels": ["model:deep"]}}
+
+        model, source = resolve_model_for_run(progress, "openai/gpt-4.1")
+
+        assert model == "openai/gpt-4.1"
+        assert source == "override"
+
+    def test_resolve_model_deep_label_uses_deep_env(self, monkeypatch):
+        """model:deep routes to configured deep model env var."""
+        monkeypatch.delenv("MYCELIUM_MODEL", raising=False)
+        monkeypatch.setenv("MYCELIUM_MODEL_DEEP", "anthropic/claude-opus-4-1")
+        progress = {"mission_context": {"labels": ["model:deep", "needs:orchestrator"]}}
+
+        model, source = resolve_model_for_run(progress, None)
+
+        assert model == "anthropic/claude-opus-4-1"
+        assert source == "model:deep:MYCELIUM_MODEL_DEEP"
+
+    def test_resolve_model_deep_label_falls_back_to_default_deep(self, monkeypatch):
+        """model:deep falls back to built-in deep model when no deep env is set."""
+        monkeypatch.delenv("MYCELIUM_MODEL", raising=False)
+        monkeypatch.delenv("MYCELIUM_MODEL_DEEP", raising=False)
+        monkeypatch.delenv("MYCELIUM_DEEP_MODEL", raising=False)
+        progress = {"bead": {"labels": ["model:deep"]}}
+
+        model, source = resolve_model_for_run(progress, None)
+
+        assert model == DEFAULT_DEEP_MODEL
+        assert source == "model:deep:default"
+
+    def test_resolve_model_without_deep_label_uses_standard_default(self, monkeypatch):
+        """Without model:deep, orchestrator uses normal model resolution."""
+        monkeypatch.delenv("MYCELIUM_MODEL", raising=False)
+        progress = {"mission_context": {"labels": ["agent:scientist"]}}
+
+        model, source = resolve_model_for_run(progress, None)
+
+        assert model == DEFAULT_MODEL
+        assert source == "default"
+
+    def test_run_agent_uses_routed_deep_model(self, temp_mission, monkeypatch):
+        """run_agent passes routed deep model to complete()."""
+        progress_file = temp_mission / "progress.yaml"
+        with open(progress_file) as f:
+            progress = yaml.safe_load(f)
+
+        progress.setdefault("mission_context", {})["labels"] = ["model:deep", "needs:orchestrator"]
+
+        with open(progress_file, "w") as f:
+            yaml.dump(progress, f)
+
+        monkeypatch.delenv("MYCELIUM_MODEL", raising=False)
+        monkeypatch.delenv("MYCELIUM_MODEL_DEEP", raising=False)
+        monkeypatch.delenv("MYCELIUM_DEEP_MODEL", raising=False)
+
+        mock_response = CompletionResponse(
+            content="Done",
+            usage=UsageMetadata(
+                prompt_tokens=100,
+                completion_tokens=50,
+                total_tokens=150,
+                cost_usd=0.01,
+                model="openai/gpt-5",
+            ),
+            success=True,
+        )
+
+        with patch("mycelium.orchestrator.complete", return_value=mock_response) as mock_complete:
+            response = run_agent(temp_mission, auto_approve=True, enable_tools=False)
+
+        assert response.success is True
+        assert mock_complete.call_args.kwargs["model"] == DEFAULT_DEEP_MODEL
 
 
 class TestRunAgent:

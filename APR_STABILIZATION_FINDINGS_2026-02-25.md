@@ -69,3 +69,4 @@
 
 1. Oracle assistant extraction/completion detection for heavy-thinking ChatGPT states where current selectors miss the assistant turn.
 2. APR macOS-portable in-place edit helper (replace raw `sed -i` calls).
+   - Status (2026-02-25): completed locally in `mycelium-noz` by switching to portable temp-file replacements in `tools/apr/apr`.
