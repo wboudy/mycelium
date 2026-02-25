@@ -253,8 +253,9 @@ def resolve_model_for_run(progress: dict[str, Any], model_override: str | None) 
     2. model:deep routing for bug beads
     3. Standard MYCELIUM_MODEL/default model
     """
-    if model_override:
-        return model_override, "override"
+    explicit_model = (model_override or "").strip()
+    if explicit_model:
+        return explicit_model, "override"
 
     routing_labels = extract_routing_labels(progress)
     if DEEP_MODEL_LABEL in routing_labels:
@@ -287,15 +288,23 @@ def append_llm_usage(
     Returns:
         Updated progress dict.
     """
-    # Initialize llm_usage section if it doesn't exist
-    if "llm_usage" not in progress:
-        progress["llm_usage"] = {
-            "runs": [],
-            "total_tokens": 0,
-            "total_cost_usd": 0.0,
-        }
-    
-    llm_usage = progress["llm_usage"]
+    llm_usage_raw = progress.get("llm_usage")
+    if not isinstance(llm_usage_raw, dict):
+        llm_usage_raw = {}
+
+    runs_raw = llm_usage_raw.get("runs")
+    runs: list[dict[str, Any]]
+    if isinstance(runs_raw, list):
+        runs = [run for run in runs_raw if isinstance(run, dict)]
+    else:
+        runs = []
+
+    llm_usage: dict[str, Any] = {
+        "runs": runs,
+        "total_tokens": 0,
+        "total_cost_usd": 0.0,
+    }
+    progress["llm_usage"] = llm_usage
     
     # Create run entry
     run_entry = {
@@ -316,9 +325,18 @@ def append_llm_usage(
     llm_usage["runs"].append(run_entry)
     
     # Update totals
-    llm_usage["total_tokens"] = sum(r.get("total_tokens", 0) for r in llm_usage["runs"])
+    llm_usage["total_tokens"] = sum(
+        int(r.get("total_tokens", 0))
+        for r in llm_usage["runs"]
+        if isinstance(r.get("total_tokens", 0), (int, float))
+    )
     llm_usage["total_cost_usd"] = round(
-        sum(r.get("cost_usd", 0) for r in llm_usage["runs"]), 6
+        sum(
+            float(r.get("cost_usd", 0.0))
+            for r in llm_usage["runs"]
+            if isinstance(r.get("cost_usd", 0.0), (int, float))
+        ),
+        6,
     )
     
     return progress
@@ -606,11 +624,37 @@ def get_usage_summary(mission_path: str | Path) -> dict[str, Any]:
     except (FileNotFoundError, yaml.YAMLError, ValueError):
         return {"total_tokens": 0, "total_cost_usd": 0.0, "runs": 0, "runs_detail": []}
     
-    llm_usage = progress.get("llm_usage", {})
+    llm_usage_raw = progress.get("llm_usage")
+    llm_usage: dict[str, Any] = llm_usage_raw if isinstance(llm_usage_raw, dict) else {}
+    runs_raw = llm_usage.get("runs", [])
+    runs_detail = [run for run in runs_raw if isinstance(run, dict)] if isinstance(runs_raw, list) else []
+
+    total_tokens_raw = llm_usage.get("total_tokens", 0)
+    if isinstance(total_tokens_raw, (int, float)):
+        total_tokens = int(total_tokens_raw)
+    else:
+        total_tokens = sum(
+            int(r.get("total_tokens", 0))
+            for r in runs_detail
+            if isinstance(r.get("total_tokens", 0), (int, float))
+        )
+
+    total_cost_raw = llm_usage.get("total_cost_usd", 0.0)
+    if isinstance(total_cost_raw, (int, float)):
+        total_cost_usd = float(total_cost_raw)
+    else:
+        total_cost_usd = round(
+            sum(
+                float(r.get("cost_usd", 0.0))
+                for r in runs_detail
+                if isinstance(r.get("cost_usd", 0.0), (int, float))
+            ),
+            6,
+        )
     
     return {
-        "total_tokens": llm_usage.get("total_tokens", 0),
-        "total_cost_usd": llm_usage.get("total_cost_usd", 0.0),
-        "runs": len(llm_usage.get("runs", [])),
-        "runs_detail": llm_usage.get("runs", []),
+        "total_tokens": total_tokens,
+        "total_cost_usd": total_cost_usd,
+        "runs": len(runs_detail),
+        "runs_detail": runs_detail,
     }

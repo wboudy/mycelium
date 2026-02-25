@@ -172,6 +172,37 @@ class TestAppendLlmUsage:
         assert result["llm_usage"]["total_tokens"] == 300
         assert result["llm_usage"]["total_cost_usd"] == 0.009
 
+    def test_normalizes_non_dict_llm_usage(self):
+        """Malformed llm_usage values are normalized before append."""
+        progress = {"llm_usage": "corrupted"}
+        response = CompletionResponse(
+            content="Test",
+            usage=UsageMetadata(total_tokens=50, cost_usd=0.002),
+            success=True,
+        )
+
+        result = append_llm_usage(progress, "scientist", response)
+
+        assert isinstance(result["llm_usage"], dict)
+        assert isinstance(result["llm_usage"]["runs"], list)
+        assert len(result["llm_usage"]["runs"]) == 1
+        assert result["llm_usage"]["total_tokens"] == 50
+
+    def test_normalizes_non_list_runs(self):
+        """Non-list runs fields are reset to a safe list."""
+        progress = {"llm_usage": {"runs": "bad-runs", "total_tokens": 999, "total_cost_usd": 3.14}}
+        response = CompletionResponse(
+            content="Test",
+            usage=UsageMetadata(total_tokens=10, cost_usd=0.001),
+            success=True,
+        )
+
+        result = append_llm_usage(progress, "verifier", response)
+
+        assert len(result["llm_usage"]["runs"]) == 1
+        assert result["llm_usage"]["total_tokens"] == 10
+        assert result["llm_usage"]["total_cost_usd"] == 0.001
+
 
 class TestCheckHitlApproval:
     """Tests for check_hitl_approval function."""
@@ -240,6 +271,44 @@ class TestGetUsageSummary:
         assert summary["runs"] == 0
         assert summary["runs_detail"] == []
 
+    def test_malformed_llm_usage_root_returns_stable_summary(self, temp_mission):
+        """Non-dict llm_usage values should not break summary generation."""
+        progress_file = temp_mission / "progress.yaml"
+        with open(progress_file) as f:
+            progress = yaml.safe_load(f)
+
+        progress["llm_usage"] = "corrupted"
+        with open(progress_file, "w") as f:
+            yaml.dump(progress, f)
+
+        summary = get_usage_summary(temp_mission)
+
+        assert summary["total_tokens"] == 0
+        assert summary["total_cost_usd"] == 0.0
+        assert summary["runs"] == 0
+        assert summary["runs_detail"] == []
+
+    def test_malformed_runs_field_is_filtered(self, temp_mission):
+        """Summary should ignore non-dict run entries and keep stable shape."""
+        progress_file = temp_mission / "progress.yaml"
+        with open(progress_file) as f:
+            progress = yaml.safe_load(f)
+
+        progress["llm_usage"] = {
+            "runs": [{"total_tokens": 7, "cost_usd": 0.002}, "bad-entry", 123],
+            "total_tokens": "not-a-number",
+            "total_cost_usd": "not-a-number",
+        }
+        with open(progress_file, "w") as f:
+            yaml.dump(progress, f)
+
+        summary = get_usage_summary(temp_mission)
+
+        assert summary["total_tokens"] == 7
+        assert summary["total_cost_usd"] == 0.002
+        assert summary["runs"] == 1
+        assert summary["runs_detail"] == [{"total_tokens": 7, "cost_usd": 0.002}]
+
 
 class TestModelRouting:
     """Tests for model routing policy in orchestrator."""
@@ -273,6 +342,17 @@ class TestModelRouting:
 
         assert model == "openai/gpt-4.1"
         assert source == "override"
+
+    def test_resolve_model_blank_override_is_ignored(self, monkeypatch):
+        """Whitespace-only override should not bypass normal routing."""
+        monkeypatch.delenv("MYCELIUM_MODEL", raising=False)
+        monkeypatch.setenv("MYCELIUM_MODEL_DEEP", "anthropic/claude-opus-4-1")
+        progress = {"mission_context": {"labels": ["model:deep"]}}
+
+        model, source = resolve_model_for_run(progress, "   ")
+
+        assert model == "anthropic/claude-opus-4-1"
+        assert source == "model:deep:MYCELIUM_MODEL_DEEP"
 
     def test_resolve_model_deep_label_uses_deep_env(self, monkeypatch):
         """model:deep routes to configured deep model env var."""
