@@ -1,5 +1,5 @@
 # APR Workflow Configuration
-# Generated: 2026-02-25T01:35:49Z
+# Updated for Round 2 prompt
 
 name: mycelium_spec
 description: "Mycelium Agentic Knowledge Vault spec workflow"
@@ -25,7 +25,7 @@ template: |
 
   ---
 
-  Then read the current working SPEC seed:
+  Then read the current SPEC:
 
   ```
   <contents of spec will be included by oracle>
@@ -50,27 +50,26 @@ template: |
   - Do not invent repo-specific details not present in CURRENT_STATE.md.
   - Prefer structured lists/tables over long prose.
 
-  ROUND 1 TASK (Canonical Draft):
-  Using TARGET_VISION.md and CURRENT_STATE.md, produce a complete implementation-grade SPEC for “Mycelium Agentic Knowledge Vault”.
+  ROUND 2 TASK (Interfaces + Schemas Lock-in):
+  Refine the SPEC to make interfaces and schemas explicit and complete.
 
-  REQUIRED CONTENT:
-  - Coherent section hierarchy.
-  - Include at minimum:
-    - Glossary
-    - Goals / Non-Goals
-    - Scope
-    - Personas / Use Cases (ingest, navigate, delta, frontier, graduate)
-    - Functional Requirements
-    - Non-Functional Requirements
-    - System Architecture (high-level components)
-    - Data Model (note types, metadata, delta report)
-    - Interfaces (CLI/commands, file layout, ingestion inputs)
-    - Governance (human canon, agent draft/review)
-    - Risks & Open Questions
-    - Acceptance Criteria (initial)
+  ROUND 2 FOCUS:
+  - Define exact command surface (names, args, outputs, side effects):
+    - /ingest, /delta, /frontier, /connect, /trace, /graduate, /context, /ideas
+  - Define file/folder layout in the vault (Inbox, Sources, Claims, Concepts, MOCs, Projects, etc.)
+  - Define canonical schemas with examples:
+    - Source note frontmatter
+    - Claim note format
+    - Concept note format
+    - Delta Report format
+    - Review queue items
+  - Add explicit contracts:
+    - idempotency rules for ingestion
+    - naming conventions
+    - link conventions ([[wikilinks]]), tags, frontmatter keys
 
   OUTPUT REQUIREMENT:
-  - Output ONLY the SPEC document.
+  - Output ONLY the updated SPEC (no commentary).
 
 template_with_impl: |
   First, read this TARGET_VISION document (README slot):
@@ -81,7 +80,7 @@ template_with_impl: |
 
   ---
 
-  Then read the current working SPEC seed:
+  Then read the current SPEC:
 
   ```
   <contents of spec will be included by oracle>
@@ -106,24 +105,23 @@ template_with_impl: |
   - Do not invent repo-specific details not present in CURRENT_STATE.md.
   - Prefer structured lists/tables over long prose.
 
-  ROUND 1 TASK (Canonical Draft):
-  Using TARGET_VISION.md and CURRENT_STATE.md, produce a complete implementation-grade SPEC for “Mycelium Agentic Knowledge Vault”.
+  ROUND 2 TASK (Interfaces + Schemas Lock-in):
+  Refine the SPEC to make interfaces and schemas explicit and complete.
 
-  REQUIRED CONTENT:
-  - Coherent section hierarchy.
-  - Include at minimum:
-    - Glossary
-    - Goals / Non-Goals
-    - Scope
-    - Personas / Use Cases (ingest, navigate, delta, frontier, graduate)
-    - Functional Requirements
-    - Non-Functional Requirements
-    - System Architecture (high-level components)
-    - Data Model (note types, metadata, delta report)
-    - Interfaces (CLI/commands, file layout, ingestion inputs)
-    - Governance (human canon, agent draft/review)
-    - Risks & Open Questions
-    - Acceptance Criteria (initial)
+  ROUND 2 FOCUS:
+  - Define exact command surface (names, args, outputs, side effects):
+    - /ingest, /delta, /frontier, /connect, /trace, /graduate, /context, /ideas
+  - Define file/folder layout in the vault (Inbox, Sources, Claims, Concepts, MOCs, Projects, etc.)
+  - Define canonical schemas with examples:
+    - Source note frontmatter
+    - Claim note format
+    - Concept note format
+    - Delta Report format
+    - Review queue items
+  - Add explicit contracts:
+    - idempotency rules for ingestion
+    - naming conventions
+    - link conventions ([[wikilinks]]), tags, frontmatter keys
 
   OUTPUT REQUIREMENT:
-  - Output ONLY the SPEC document.
+  - Output ONLY the updated SPEC (no commentary).
