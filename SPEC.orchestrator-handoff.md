@@ -1,5 +1,5 @@
 # Orchestrator Handoff and Escalation Spec
-Version: 0.4
+Version: 0.5
 Status: Draft
 
 ## 1. Purpose
@@ -35,6 +35,10 @@ This is not a replacement for existing skills. It is a control-plane extension.
 | Orchestrator Command | Runs the selected model for one bead |
 | Escalation Sink | Marks `needs:human` and optionally sends notification |
 
+### 3.1 Normative Language
+
+The keywords `MUST`, `MUST NOT`, `SHOULD`, `SHOULD NOT`, and `MAY` are used as normative requirements.
+
 ## 4. Handoff Signals
 
 ### 4.1 Required Labels on Spawned Bug Bead
@@ -67,6 +71,23 @@ handoff:
 
 If this block is missing, watcher treats the bead as non-trivial.
 
+### 4.4 Handoff Schema Constraints (Normative)
+
+All required handoff fields MUST pass these checks before any execution:
+
+| Field | Type | Constraint |
+|---|---|---|
+| `origin_id` | string | `^[a-z0-9][a-z0-9-]{1,63}$` |
+| `bug_id` | string | `^[a-z0-9][a-z0-9-]{1,63}$` |
+| `error_signature` | string | 8..128 chars, lowercase `[a-z0-9:_-]` |
+| `expected_minutes` | integer | 1..480 |
+| `estimated_loc` | integer | 1..5000 |
+| `touches_api_or_schema` | boolean | strict boolean |
+| `touches_security_or_auth` | boolean | strict boolean |
+| `quick_test_available` | boolean | strict boolean |
+
+If validation fails, watcher MUST set `needs:human` and `error_class=schema_invalid`, and MUST NOT invoke orchestrator command.
+
 ## 5. Finite State Machine
 
 State is represented using labels and retry metadata in notes.
@@ -96,6 +117,21 @@ State is represented using labels and retry metadata in notes.
    - Preconditions: retry_count >= max_retries, or failure classified as non-retriable.
    - Actions: add `needs:human`, remove `needs:orchestrator` and `orchestrator:running`.
 
+### 5.3 Label Invariants (Normative)
+
+1. Exactly one of these labels MAY be active at any time:
+   - `needs:orchestrator`
+   - `orchestrator:running`
+   - `orchestrator:failed`
+   - `orchestrator:done`
+   - `orchestrator:dead`
+2. `needs:human` MAY co-exist only with:
+   - `orchestrator:dead`
+   - `orchestrator:failed`
+3. Invalid combinations (for example `orchestrator:running` + `orchestrator:done`) MUST trigger `fsm_invalid` handling:
+   - auto-normalize only when deterministic
+   - otherwise escalate to `needs:human`.
+
 ## 6. Trivial Fix Policy
 
 Goal: keep humans out of low-risk noise.
@@ -117,6 +153,10 @@ If any check fails, route through standard orchestrator flow.
 
 - `max_retries = 3`
 - Backoff schedule: `1m`, `5m`, `15m`
+- Jitter: uniform `-15%..+15%`
+- Retry class mapping:
+  - retriable: `timeout`, `rate_limited`, `upstream_unavailable`, `network_error`, `state_conflict`, `stale_run`, `unknown_error`
+  - non-retriable: `schema_invalid`, `auth_failed`, `permission_denied`, `bad_input`, `policy_invalid`
 
 ### 7.2 Loop Guards
 
@@ -141,6 +181,10 @@ If any check fails, route through standard orchestrator flow.
 - Off-hours:
   - Immediate human notification only for P0/P1 or `customer-impact`.
   - Else queue (`notify:queued`) and schedule next business-hour notification.
+- Business-hours interval semantics: local time `[start, end)` (start inclusive, end exclusive).
+- Timezone source: policy IANA timezone (`orchestrator-policy.yaml`), default `America/New_York`.
+- Day-boundary for counters/budgets: local midnight in policy timezone.
+- Holidays are out of scope in v1; weekends are off-hours.
 
 ### 8.3 Human Reach-Out Channels
 
@@ -162,6 +206,12 @@ Watcher executes a configured command template per claimed bead:
 Notes:
 - Actual command remains configurable to avoid coupling this spec to one CLI shape.
 - Watcher must capture exit code and append summary notes.
+- Command envelope MUST include:
+  - `run_id`
+  - `exit_code`
+  - `status` (`success|failure|partial`)
+  - optional `error_class`
+- `partial` MUST be treated as failure unless post-run reconciliation proves terminal success.
 
 ## 10. Observability
 
@@ -183,6 +233,8 @@ watcher_run:
   timestamp: <ISO-8601 UTC>
 ```
 
+`watcher_run` MUST be append-only and immutable after write.
+
 ## 11. Acceptance Criteria
 
 1. Bug beads labeled `needs:orchestrator` are claimed and routed exactly once per attempt.
@@ -200,6 +252,11 @@ watcher_run:
 13. Failed or escalated handoffs include a sanitized reproducibility capsule.
 14. Human escalation flow respects configurable daily risk budget with critical bypass.
 15. Model-routing decisions incorporate signature trust history and are auditable.
+16. Invalid label combinations are auto-normalized or escalated via deterministic `fsm_invalid` rules.
+17. Retry behavior follows class-based retriable/non-retriable taxonomy and jittered schedule.
+18. Policy precedence order is deterministic and test-verified.
+19. Reproducibility capsules enforce redaction rules and fail closed on redaction errors.
+20. Risk-budget counters reset at local midnight in policy timezone.
 
 ## 12. Out of Scope (This Spec)
 
@@ -339,9 +396,108 @@ The following three additions were selected after evaluating ten candidates.
      - low trust => deep model earlier + stricter guardrails
    - Score is recorded in `watcher_run.signature_trust_score`.
 
-## 15. Failure Modes and Mitigation Plan
+## 15. Deterministic Policy Precedence
 
-### 15.1 Two Watchers Claim Same Bead
+When multiple rules apply, watcher MUST evaluate in this exact order:
+
+1. Policy load and parse validity
+2. Schema validity (`handoff` + current state readability)
+3. FSM invariant validity
+4. Dead-letter / max retry guard
+5. Failure-class retriable decision
+6. Criticality (`P0/P1` or `customer-impact`) bypass
+7. Risk-budget checks
+8. Time-window routing (business/off-hours)
+9. Dedupe suppression
+10. Signature-trust routing choice
+
+If any step cannot be evaluated deterministically, watcher MUST fail closed to `needs:human` with `error_class=policy_ambiguous`.
+
+## 16. Canonical Defaults (Normative)
+
+| Key | Default |
+|---|---|
+| `timezone` | `America/New_York` |
+| `business_hours` | `Mon-Fri 09:00-18:00` |
+| `max_retries` | `3` |
+| `retry_backoff_seconds` | `[60, 300, 900]` |
+| `retry_jitter_pct` | `15` |
+| `dedupe_window_minutes` | `60` |
+| `max_noncritical_escalations_per_day` | `20` |
+| `max_noncritical_pages_per_hour` | `5` |
+| `initial_signature_trust` | `0.5` |
+| `signature_min_samples` | `5` |
+
+Policy file values override defaults. Missing values MUST fall back to these defaults.
+
+## 17. Algorithm Specifications
+
+### 17.1 Retry Delay
+
+For attempt `n` (1-indexed):
+
+1. `base = retry_backoff_seconds[min(n-1, len(retry_backoff_seconds)-1)]`
+2. `jitter_factor = 1 + U(-jitter_pct, +jitter_pct)`
+3. `delay = round(base * jitter_factor)`
+4. `next_retry_at = now_utc + delay`
+
+### 17.2 Signature Trust Score
+
+For a signature with `S=auto_resolve_successes`, `H=human_escalations`:
+
+`trust = (S + 1) / (S + H + 2)`
+
+Routing policy:
+- if samples `< signature_min_samples`: treat as neutral (`0.5`)
+- `trust >= 0.75`: shallow/cheaper route first
+- `0.45 <= trust < 0.75`: normal route
+- `trust < 0.45`: deep route first + strict guardrails
+
+### 17.3 Incident Cluster Risk Score
+
+Cluster score used for digest sorting:
+
+`score = priority_weight + spread_weight + age_weight + human_weight`
+
+Where:
+- `priority_weight`: `P0=8, P1=5, P2=3, P3=1, P4=0`
+- `spread_weight`: number of unique origin beads in cluster
+- `age_weight`: `min(cluster_age_days, 7)`
+- `human_weight`: `2 * unresolved_needs_human_count`
+
+Higher score appears earlier in digest.
+
+## 18. Reproducibility Capsule Redaction Rules
+
+Capsule generation MUST redact sensitive material before write:
+
+1. Redact values for keys matching case-insensitive patterns:
+   - `token`, `secret`, `password`, `api_key`, `authorization`, `cookie`
+2. Redact bearer/basic auth strings in logs and command envelopes.
+3. Replace filesystem home prefixes with `<HOME>` when outside project root appears.
+4. If redaction step fails, watcher MUST:
+   - avoid writing raw capsule
+   - escalate `needs:human` with `error_class=redaction_failed`.
+
+## 19. Ambiguity and Fail-Closed Rules
+
+Watcher MUST fail closed (no auto-execution) when any of the following occur:
+
+1. Missing or malformed required handoff fields.
+2. Multiple active orchestrator state labels.
+3. Unresolved policy conflict or unknown precedence outcome.
+4. Non-deterministic replay inputs (missing run artifact fields).
+5. Clock/timezone evaluation failure.
+
+Fail-closed action:
+- set `needs:human`
+- append structured `watcher_run` with `result=human_required`
+- include specific `error_class`
+- stop processing that handoff for current cycle.
+
+## 20. Failure Modes and Mitigation Plan
+
+### 20.1 Two Watchers Claim Same Bead
 
 - Failure mode: duplicate execution due to race.
 - Prevention:
@@ -354,7 +510,7 @@ The following three additions were selected after evaluating ten candidates.
   - Keep earliest owner; demote later owner attempt to no-op.
   - Append conflict note and continue with single owner.
 
-### 15.2 Stuck `RUNNING` After Crash/Reboot
+### 20.2 Stuck `RUNNING` After Crash/Reboot
 
 - Failure mode: orphaned in-flight state blocks progress.
 - Prevention:
@@ -366,7 +522,7 @@ The following three additions were selected after evaluating ten candidates.
   - Transition to `RETRY_WAIT` with `error_class=stale_run`.
   - Increment attempt and schedule backoff.
 
-### 15.3 Origin/Bug Loop Due to Dependency Cleanup Drift
+### 20.3 Origin/Bug Loop Due to Dependency Cleanup Drift
 
 - Failure mode: bug closes but origin remains blocked or re-enters interrupt loop repeatedly.
 - Prevention:
@@ -379,7 +535,7 @@ The following three additions were selected after evaluating ten candidates.
   - Auto-open follow-up bead with `needs:human`.
   - Mark pair as circuit-broken; stop auto re-interrupt for that signature.
 
-### 15.4 Timezone/DST Escalation Mistakes
+### 20.4 Timezone/DST Escalation Mistakes
 
 - Failure mode: notifications sent in wrong window.
 - Prevention:
@@ -393,7 +549,7 @@ The following three additions were selected after evaluating ten candidates.
     - queue non-critical
     - immediately notify critical.
 
-### 15.5 Partial Success with Non-Zero Exit
+### 20.5 Partial Success with Non-Zero Exit
 
 - Failure mode: orchestrator changed bead state but process exits as failure.
 - Prevention:
@@ -405,7 +561,7 @@ The following three additions were selected after evaluating ten candidates.
   - If state indicates success, transition to `DONE` and record `result=success_with_exit_mismatch`.
   - Else treat as retriable failure.
 
-### 15.6 Manual Label Edits Break FSM Invariants
+### 20.6 Manual Label Edits Break FSM Invariants
 
 - Failure mode: impossible combinations (for example `needs:orchestrator` + `orchestrator:done`).
 - Prevention:
@@ -417,7 +573,7 @@ The following three additions were selected after evaluating ten candidates.
   - Auto-normalize to nearest valid state when unambiguous.
   - Escalate to `needs:human` when ambiguous.
 
-### 15.7 `bd` Staleness and Sync Inconsistency
+### 20.7 `bd` Staleness and Sync Inconsistency
 
 - Failure mode: watcher acts on stale issue view.
 - Prevention:
@@ -430,7 +586,7 @@ The following three additions were selected after evaluating ten candidates.
   - Refresh state, retry once with jitter.
   - If mismatch persists, set `needs:human` with `error_class=state_divergence`.
 
-## 16. Additional Test Matrix
+## 21. Additional Test Matrix
 
 1. Lease handoff race simulation with two watcher instances.
 2. Crash/restart stale heartbeat reconciliation.
@@ -446,3 +602,9 @@ The following three additions were selected after evaluating ten candidates.
 12. Reproducibility capsule generation validates completeness and redaction rules.
 13. Risk-budget governor enforces quotas while always allowing critical bypass.
 14. Signature trust ledger updates deterministically and changes routing as expected.
+15. Policy precedence order is enforced exactly and tested against conflict cases.
+16. Invalid label-set combinations trigger deterministic `fsm_invalid` handling.
+17. Retry classifier sends non-retriable classes directly to human-required state.
+18. Capsule redaction failure never writes unredacted content.
+19. Default policy fallback values are used when policy keys are absent.
+20. Timezone/day-boundary handling resets budgets at local midnight.
