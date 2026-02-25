@@ -348,6 +348,26 @@ class TestWriteFile:
             finally:
                 server.HITL_AUTO_APPROVE = original_value
 
+    def test_write_requires_approval_with_malformed_nested_implementer(self, sample_progress_yaml, temp_dir):
+        """Malformed nested current_agent payloads should still enforce HITL approval."""
+        with open(sample_progress_yaml) as f:
+            progress = yaml.safe_load(f)
+        progress["current_agent"] = {"current_agent": {"value": "implementer"}}
+        with open(sample_progress_yaml, "w") as f:
+            yaml.dump(progress, f)
+
+        target = temp_dir / "malformed-guard.txt"
+        result = write_file(
+            str(target),
+            "blocked",
+            mission_path=str(sample_progress_yaml.parent),
+            auto_approve=False,
+        )
+
+        assert result["success"] is False
+        assert result["approval_required"] is True
+        assert not target.exists()
+
 
 # =============================================================================
 # Tests: run_command
@@ -415,6 +435,24 @@ class TestRunCommand:
         
         assert result["success"] is False
         assert result["exit_code"] == 42
+
+    def test_run_requires_approval_with_malformed_list_implementer(self, sample_progress_yaml, temp_dir):
+        """Malformed list-shaped current_agent payloads should still enforce HITL approval."""
+        with open(sample_progress_yaml) as f:
+            progress = yaml.safe_load(f)
+        progress["current_agent"] = [{"unexpected": "shape"}, {"value": "implementer"}]
+        with open(sample_progress_yaml, "w") as f:
+            yaml.dump(progress, f)
+
+        result = run_command(
+            "echo 'should not run'",
+            cwd=str(temp_dir),
+            mission_path=str(sample_progress_yaml.parent),
+            auto_approve=False,
+        )
+
+        assert result["success"] is False
+        assert result["approval_required"] is True
 
 
 # =============================================================================
@@ -512,6 +550,29 @@ class TestSearchCodebase:
         )
         
         assert len(result) == 5
+
+    def test_search_zero_max_results_returns_empty(self, temp_dir):
+        """max_results <= 0 should return no matches."""
+        (temp_dir / "file.txt").write_text("match this pattern\n")
+
+        result = search_codebase(
+            "match",
+            directory=str(temp_dir),
+            max_results=0,
+        )
+
+        assert result == []
+
+    def test_search_invalid_max_results_raises_value_error(self, temp_dir):
+        """Non-integer max_results values should raise a clear validation error."""
+        (temp_dir / "file.txt").write_text("match this pattern\n")
+
+        with pytest.raises(ValueError, match="max_results must be an integer"):
+            search_codebase(
+                "match",
+                directory=str(temp_dir),
+                max_results="bad",  # type: ignore[arg-type]
+            )
 
 
 # =============================================================================

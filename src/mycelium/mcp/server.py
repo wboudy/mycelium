@@ -29,6 +29,45 @@ mcp = FastMCP("Mycelium MCP Server")
 HITL_AUTO_APPROVE = os.environ.get("MYCELIUM_HITL_AUTO_APPROVE", "").lower() in ("1", "true", "yes")
 
 
+def _normalize_agent_value(raw_agent: Any) -> str:
+    """Normalize current_agent values that may be malformed by LLM writes."""
+    def _normalize(value: Any, allow_fallback_stringify: bool) -> str:
+        if value is None:
+            return ""
+
+        if isinstance(value, dict):
+            saw_agent_key = False
+            for key in ("current_agent", "value", "agent"):
+                if key in value:
+                    saw_agent_key = True
+                    normalized = _normalize(value[key], allow_fallback_stringify=False)
+                    if normalized:
+                        return normalized
+            if saw_agent_key:
+                return ""
+            if allow_fallback_stringify:
+                return str(value).strip().lower()
+            return ""
+
+        if isinstance(value, (list, tuple)):
+            for item in value:
+                normalized = _normalize(item, allow_fallback_stringify=False)
+                if normalized:
+                    return normalized
+            return ""
+
+        if isinstance(value, set):
+            for item in sorted(value, key=str):
+                normalized = _normalize(item, allow_fallback_stringify=False)
+                if normalized:
+                    return normalized
+            return ""
+
+        return str(value).strip().lower()
+
+    return _normalize(raw_agent, allow_fallback_stringify=True)
+
+
 def _get_current_agent(mission_path: str) -> str:
     """Get current_agent from progress.yaml."""
     progress_file = Path(mission_path)
@@ -41,7 +80,7 @@ def _get_current_agent(mission_path: str) -> str:
     try:
         with open(progress_file) as f:
             progress = yaml.safe_load(f) or {}
-        return progress.get("current_agent", "").strip()
+        return _normalize_agent_value(progress.get("current_agent", ""))
     except Exception:
         return ""
 
@@ -423,6 +462,14 @@ def _search_codebase(
     Returns:
         List of match dicts with 'file', 'line_number', 'content' keys.
     """
+    try:
+        result_limit = int(max_results)
+    except (TypeError, ValueError):
+        raise ValueError("max_results must be an integer")
+
+    if result_limit <= 0:
+        return []
+
     path = Path(directory)
     
     if not path.exists():
@@ -482,7 +529,7 @@ def _search_codebase(
                     "content": line.strip(),
                 })
                 
-                if len(results) >= max_results:
+                if len(results) >= result_limit:
                     return results
     
     return results
