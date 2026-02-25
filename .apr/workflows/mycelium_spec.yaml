@@ -1,5 +1,5 @@
 # APR Workflow Configuration
-# Updated for Round 2 prompt
+# Updated for Round 3 prompt
 
 name: mycelium_spec
 description: "Mycelium Agentic Knowledge Vault spec workflow"
@@ -50,26 +50,29 @@ template: |
   - Do not invent repo-specific details not present in CURRENT_STATE.md.
   - Prefer structured lists/tables over long prose.
 
-  ROUND 2 TASK (Interfaces + Schemas Lock-in):
-  Refine the SPEC to make interfaces and schemas explicit and complete.
+  ROUND 3 TASK (Delta/Dedupe Engine + Invariants):
+  Refine the SPEC to precisely define delta detection, deduplication, and merge behavior.
 
-  ROUND 2 FOCUS:
-  - Define exact command surface (names, args, outputs, side effects):
-    - /ingest, /delta, /frontier, /connect, /trace, /graduate, /context, /ideas
-  - Define file/folder layout in the vault (Inbox, Sources, Claims, Concepts, MOCs, Projects, etc.)
-  - Define canonical schemas with examples:
-    - Source note frontmatter
-    - Claim note format
-    - Concept note format
-    - Delta Report format
-    - Review queue items
-  - Add explicit contracts:
-    - idempotency rules for ingestion
-    - naming conventions
-    - link conventions ([[wikilinks]]), tags, frontmatter keys
+  ROUND 3 FOCUS:
+  - Define atomic claim representation and matching strategy:
+    - similarity criteria
+    - canonicalization rules
+    - merge rules and conflict handling
+  - Define delta scoring:
+    - novelty score inputs
+    - redundancy score
+    - credibility/support scoring (if included)
+  - Define invariants:
+    - human owns canon enforcement
+    - agents write drafts/inbox only unless explicitly authorized
+    - provenance is mandatory for imported claims
+  - Define edge cases:
+    - partial overlap sources
+    - contradictions between sources
+    - repeated ingestion of same URL/PDF
 
   OUTPUT REQUIREMENT:
-  - Output ONLY the updated SPEC (no commentary).
+  - Output ONLY the updated SPEC.
 
 template_with_impl: |
   First, read this TARGET_VISION document (README slot):
@@ -105,23 +108,26 @@ template_with_impl: |
   - Do not invent repo-specific details not present in CURRENT_STATE.md.
   - Prefer structured lists/tables over long prose.
 
-  ROUND 2 TASK (Interfaces + Schemas Lock-in):
-  Refine the SPEC to make interfaces and schemas explicit and complete.
+  ROUND 3 TASK (Delta/Dedupe Engine + Invariants):
+  Refine the SPEC to precisely define delta detection, deduplication, and merge behavior.
 
-  ROUND 2 FOCUS:
-  - Define exact command surface (names, args, outputs, side effects):
-    - /ingest, /delta, /frontier, /connect, /trace, /graduate, /context, /ideas
-  - Define file/folder layout in the vault (Inbox, Sources, Claims, Concepts, MOCs, Projects, etc.)
-  - Define canonical schemas with examples:
-    - Source note frontmatter
-    - Claim note format
-    - Concept note format
-    - Delta Report format
-    - Review queue items
-  - Add explicit contracts:
-    - idempotency rules for ingestion
-    - naming conventions
-    - link conventions ([[wikilinks]]), tags, frontmatter keys
+  ROUND 3 FOCUS:
+  - Define atomic claim representation and matching strategy:
+    - similarity criteria
+    - canonicalization rules
+    - merge rules and conflict handling
+  - Define delta scoring:
+    - novelty score inputs
+    - redundancy score
+    - credibility/support scoring (if included)
+  - Define invariants:
+    - human owns canon enforcement
+    - agents write drafts/inbox only unless explicitly authorized
+    - provenance is mandatory for imported claims
+  - Define edge cases:
+    - partial overlap sources
+    - contradictions between sources
+    - repeated ingestion of same URL/PDF
 
   OUTPUT REQUIREMENT:
-  - Output ONLY the updated SPEC (no commentary).
+  - Output ONLY the updated SPEC.
