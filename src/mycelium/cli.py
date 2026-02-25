@@ -23,6 +23,20 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
+def _normalize_objective(progress: dict) -> str:
+    """Extract a printable objective string from possibly malformed progress payloads."""
+    mission_context = progress.get("mission_context")
+    if not isinstance(mission_context, dict):
+        return ""
+
+    objective = mission_context.get("objective", "")
+    if objective is None:
+        return ""
+    if isinstance(objective, str):
+        return objective.strip()
+    return str(objective).strip()
+
+
 def cmd_run(args: argparse.Namespace) -> int:
     """Execute the run command."""
     from mycelium.orchestrator import run_agent
@@ -87,7 +101,7 @@ def cmd_status(args: argparse.Namespace) -> int:
     # Mission info
     mission_name = mission_path.name if mission_path.is_dir() else mission_path.parent.name
     current_agent = normalize_current_agent(progress.get("current_agent", ""))
-    objective = progress.get("mission_context", {}).get("objective", "")
+    objective = _normalize_objective(progress)
     
     print()
     print(f"📋 Mission: {mission_name}")

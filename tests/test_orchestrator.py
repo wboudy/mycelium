@@ -28,6 +28,7 @@ from mycelium.orchestrator import (
     run_agent,
 )
 from mycelium.llm import CompletionResponse, DEFAULT_MODEL, UsageMetadata
+from mycelium.cli import _normalize_objective
 
 
 @pytest.fixture
@@ -145,6 +146,15 @@ class TestNormalizeCurrentAgent:
         """Unknown dict payloads fall back to stable stringification."""
         raw = {"unexpected": "shape"}
         assert normalize_current_agent(raw) == str(raw).strip()
+
+    def test_none_returns_empty_string(self):
+        """None current_agent should be treated as empty."""
+        assert normalize_current_agent(None) == ""
+
+    def test_nested_none_returns_empty_string(self):
+        """Nested current_agent/value None payloads should normalize to empty."""
+        raw = {"current_agent": {"value": None}}
+        assert normalize_current_agent(raw) == ""
 
 
 class TestAppendLlmUsage:
@@ -549,6 +559,45 @@ class TestRunAgent:
 
         assert response.success is True
         assert "Prompt for scientist" in response.content
+
+    def test_none_current_agent_marks_mission_complete(self, temp_mission):
+        """run_agent should treat None current_agent as mission complete."""
+        progress_file = temp_mission / "progress.yaml"
+        with open(progress_file) as f:
+            progress = yaml.safe_load(f)
+
+        progress["current_agent"] = None
+        with open(progress_file, "w") as f:
+            yaml.dump(progress, f)
+
+        response = run_agent(temp_mission)
+
+        assert response.success is True
+        assert "Mission complete" in response.content
+
+
+class TestCliStatusParsing:
+    """Tests for cmd_status parsing helpers."""
+
+    def test_normalize_objective_from_string(self):
+        """Returns stripped objective text when mission_context is valid."""
+        progress = {"mission_context": {"objective": "  Build X  "}}
+        assert _normalize_objective(progress) == "Build X"
+
+    def test_normalize_objective_from_non_dict_context(self):
+        """Non-dict mission_context should not crash and returns empty."""
+        progress = {"mission_context": ["unexpected", "shape"]}
+        assert _normalize_objective(progress) == ""
+
+    def test_normalize_objective_from_non_string(self):
+        """Non-string objective is stringified safely."""
+        progress = {"mission_context": {"objective": {"goal": "ship"}}}
+        assert _normalize_objective(progress) == "{'goal': 'ship'}"
+
+    def test_normalize_objective_from_none(self):
+        """None objective maps to empty string."""
+        progress = {"mission_context": {"objective": None}}
+        assert _normalize_objective(progress) == ""
 
 
 class TestCliHelp:

@@ -274,12 +274,17 @@ def resolve_model_for_run(progress: dict[str, Any], model_override: str | None) 
 
 def normalize_current_agent(raw_agent: Any) -> str:
     """Normalize current_agent values that may be malformed by LLM writes."""
+    if raw_agent is None:
+        return ""
+
     if isinstance(raw_agent, dict):
         for key in ("current_agent", "value", "agent"):
             if key in raw_agent:
                 value = raw_agent[key]
                 if isinstance(value, dict):
                     return normalize_current_agent(value)
+                if value is None:
+                    return ""
                 return str(value).strip()
         return str(raw_agent).strip()
 
