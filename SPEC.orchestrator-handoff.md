@@ -1,5 +1,5 @@
 # Orchestrator Handoff and Escalation Spec
-Version: 0.1
+Version: 0.2
 Status: Draft
 
 ## 1. Purpose
@@ -186,6 +186,9 @@ watcher_run:
 4. `needs:human` is set automatically when retry budget is exhausted.
 5. Off-hours policy suppresses non-critical immediate paging.
 6. Original implementation bead remains blocked until blocker bug is closed.
+7. Daily digest is generated and delivered during business hours with escalation summary.
+8. Duplicate human notifications for same signature are suppressed within dedupe window.
+9. Stale `RUNNING` beads are auto-reconciled without manual intervention.
 
 ## 12. Out of Scope (This Spec)
 
@@ -203,3 +206,167 @@ watcher_run:
    - Off-hours escalation routing
    - Trivial-fix gate behavior
 4. Update `mycelium-bug-interrupt` to emit required handoff block.
+
+## 14. Detailed Implementation Plan
+
+### 14.1 Phase 1: Core Reliability
+
+1. Replace basic lock with lease lock + heartbeat.
+   - Lock file: `.beads/orchestrator-watch.lock`
+   - Lease fields: `owner_id`, `pid`, `started_at`, `last_heartbeat`
+   - Heartbeat interval: 10s
+   - Stale lease timeout: 45s
+2. Add persistent idempotency store.
+   - File: `.beads/orchestrator-handoff-state.json`
+   - Keys: `handoff_key`, `state`, `attempt`, `last_transition_at`
+   - Required invariant: same `handoff_key` cannot execute concurrently.
+3. Add stale-run reconciler pass before each poll iteration.
+   - If bead labeled `orchestrator:running` and heartbeat stale:
+     - transition to `RETRY_WAIT`
+     - append recovery note
+4. Enforce strict handoff schema validation.
+   - Missing required fields => `needs:human` with `error_class=schema_invalid`
+   - No execution attempt allowed on invalid payload.
+5. Add dead-letter state.
+   - Label: `orchestrator:dead`
+   - Enter when retry cap reached or hard non-retriable failure occurs.
+   - Must always co-occur with `needs:human`.
+
+### 14.2 Phase 2: Signal Quality and Human Load Control
+
+1. Add notification dedupe window.
+   - Key: `origin_id + error_signature + error_class`
+   - Suppression window: 60 minutes
+2. Add daily human digest.
+   - Delivery window: next business-hour window (default 09:30 local)
+   - Content:
+     - New escalations
+     - Dead-letter items
+     - Top recurring signatures
+     - Retry trend and success ratio
+3. Add off-hours queuing policy.
+   - P0/P1 or `customer-impact`: immediate notify
+   - P2+: queue for digest unless explicit urgent override
+4. Add escalation priority scoring for digest order.
+   - Inputs: priority, customer-impact, retries, age
+   - Output: deterministic sort for human triage.
+
+### 14.3 Phase 3: Adaptive and Advanced Behaviors
+
+1. Add shadow mode.
+   - Watcher computes transitions and logs "would-run" outcomes without execution.
+   - Exit criterion: 7-day false-positive rate under threshold.
+2. Add trivial-fix confidence scoring.
+   - Start rule-based; persist prediction vs outcome.
+   - Track precision/recall weekly for threshold tuning.
+3. Add adaptive retry backoff.
+   - Repeated identical transient infra failures => longer cooldown.
+   - Unique/first-time transient failures => default schedule.
+4. Add daily quality report.
+   - Metrics:
+     - Auto-resolve rate
+     - Human escalation rate
+     - Mean time to recovery
+     - Loop prevention interventions
+
+## 15. Failure Modes and Mitigation Plan
+
+### 15.1 Two Watchers Claim Same Bead
+
+- Failure mode: duplicate execution due to race.
+- Prevention:
+  - Lease lock with heartbeat.
+  - Atomic claim transition: add `orchestrator:running` and remove `needs:orchestrator` in one guarded update.
+- Detection:
+  - Invariant check: no bead may have multiple active watcher owners.
+  - Alert on duplicate `RUNNING` notes for same `handoff_key`.
+- Recovery:
+  - Keep earliest owner; demote later owner attempt to no-op.
+  - Append conflict note and continue with single owner.
+
+### 15.2 Stuck `RUNNING` After Crash/Reboot
+
+- Failure mode: orphaned in-flight state blocks progress.
+- Prevention:
+  - Heartbeat required while running.
+  - Max run duration per attempt (for example 20m).
+- Detection:
+  - Reconciler identifies stale heartbeat or exceeded runtime.
+- Recovery:
+  - Transition to `RETRY_WAIT` with `error_class=stale_run`.
+  - Increment attempt and schedule backoff.
+
+### 15.3 Origin/Bug Loop Due to Dependency Cleanup Drift
+
+- Failure mode: bug closes but origin remains blocked or re-enters interrupt loop repeatedly.
+- Prevention:
+  - Resume workflow must remove dependency and set origin `in_progress`.
+  - Enforce max re-interrupt count per origin+signature.
+- Detection:
+  - Repeated interrupts with same signature over threshold.
+  - Closed bug with origin still blocked beyond grace period.
+- Recovery:
+  - Auto-open follow-up bead with `needs:human`.
+  - Mark pair as circuit-broken; stop auto re-interrupt for that signature.
+
+### 15.4 Timezone/DST Escalation Mistakes
+
+- Failure mode: notifications sent in wrong window.
+- Prevention:
+  - Store schedule in explicit IANA timezone, not UTC offsets.
+  - Normalize all internal timestamps to UTC + timezone conversion at evaluation.
+- Detection:
+  - Emit evaluated window metadata in logs (`local_time`, `tz`, `policy_path`).
+  - Add DST boundary tests.
+- Recovery:
+  - If schedule ambiguity detected, fall back to safe mode:
+    - queue non-critical
+    - immediately notify critical.
+
+### 15.5 Partial Success with Non-Zero Exit
+
+- Failure mode: orchestrator changed bead state but process exits as failure.
+- Prevention:
+  - Command contract must support structured status output (success/failure + action id).
+  - Idempotent side effects keyed by `handoff_key` + `attempt`.
+- Detection:
+  - Post-run state reconciliation compares expected vs actual labels/notes.
+- Recovery:
+  - If state indicates success, transition to `DONE` and record `result=success_with_exit_mismatch`.
+  - Else treat as retriable failure.
+
+### 15.6 Manual Label Edits Break FSM Invariants
+
+- Failure mode: impossible combinations (for example `needs:orchestrator` + `orchestrator:done`).
+- Prevention:
+  - Invariant validator runs each loop and before transitions.
+  - Optional protected-label policy for orchestrator-owned labels.
+- Detection:
+  - Validator emits `fsm_invalid` with full label snapshot.
+- Recovery:
+  - Auto-normalize to nearest valid state when unambiguous.
+  - Escalate to `needs:human` when ambiguous.
+
+### 15.7 `bd` Staleness and Sync Inconsistency
+
+- Failure mode: watcher acts on stale issue view.
+- Prevention:
+  - Poll cycle includes `bd sync --status` health check.
+  - Use monotonic snapshot token and skip processing when stale warning present.
+- Detection:
+  - Mismatch between local bead state and command write result.
+  - Repeated optimistic-update failures.
+- Recovery:
+  - Refresh state, retry once with jitter.
+  - If mismatch persists, set `needs:human` with `error_class=state_divergence`.
+
+## 16. Additional Test Matrix
+
+1. Lease handoff race simulation with two watcher instances.
+2. Crash/restart stale heartbeat reconciliation.
+3. DST transition cases for off-hours policy.
+4. Duplicate notification suppression in dedupe window.
+5. Partial-success exit mismatch reconciliation.
+6. Manual label corruption auto-normalization.
+7. Dead-letter transition after max retries.
+8. Daily digest generation with mixed severities and dedupe.
