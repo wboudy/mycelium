@@ -1,5 +1,5 @@
 # APR Workflow Configuration
-# Updated for Round 3 prompt
+# Updated for Round 4 prompt
 
 name: mycelium_spec
 description: "Mycelium Agentic Knowledge Vault spec workflow"
@@ -50,26 +50,26 @@ template: |
   - Do not invent repo-specific details not present in CURRENT_STATE.md.
   - Prefer structured lists/tables over long prose.
 
-  ROUND 3 TASK (Delta/Dedupe Engine + Invariants):
-  Refine the SPEC to precisely define delta detection, deduplication, and merge behavior.
+  ROUND 4 TASK (Security/Privacy/Failure Modes/Observability):
+  Refine the SPEC to be production-grade on privacy, security, reliability, and operability.
 
-  ROUND 3 FOCUS:
-  - Define atomic claim representation and matching strategy:
-    - similarity criteria
-    - canonicalization rules
-    - merge rules and conflict handling
-  - Define delta scoring:
-    - novelty score inputs
-    - redundancy score
-    - credibility/support scoring (if included)
-  - Define invariants:
-    - human owns canon enforcement
-    - agents write drafts/inbox only unless explicitly authorized
-    - provenance is mandatory for imported claims
-  - Define edge cases:
-    - partial overlap sources
-    - contradictions between sources
-    - repeated ingestion of same URL/PDF
+  ROUND 4 FOCUS:
+  - Privacy & security controls:
+    - local-first assumptions
+    - redaction/sanitization controls for external LLM calls
+    - allowlist of folders/files that can be sent
+    - audit log of what was sent
+  - Threat model-lite:
+    - sensitive data leakage vectors
+    - mitigation requirements
+  - Failure modes and recovery:
+    - retries, backoff, rate limits
+    - partial ingestion rollback
+    - corrupted note handling
+  - Observability:
+    - ingestion logs
+    - delta report history
+    - metrics (ingestion time, delta size, errors)
 
   OUTPUT REQUIREMENT:
   - Output ONLY the updated SPEC.
@@ -108,26 +108,26 @@ template_with_impl: |
   - Do not invent repo-specific details not present in CURRENT_STATE.md.
   - Prefer structured lists/tables over long prose.
 
-  ROUND 3 TASK (Delta/Dedupe Engine + Invariants):
-  Refine the SPEC to precisely define delta detection, deduplication, and merge behavior.
+  ROUND 4 TASK (Security/Privacy/Failure Modes/Observability):
+  Refine the SPEC to be production-grade on privacy, security, reliability, and operability.
 
-  ROUND 3 FOCUS:
-  - Define atomic claim representation and matching strategy:
-    - similarity criteria
-    - canonicalization rules
-    - merge rules and conflict handling
-  - Define delta scoring:
-    - novelty score inputs
-    - redundancy score
-    - credibility/support scoring (if included)
-  - Define invariants:
-    - human owns canon enforcement
-    - agents write drafts/inbox only unless explicitly authorized
-    - provenance is mandatory for imported claims
-  - Define edge cases:
-    - partial overlap sources
-    - contradictions between sources
-    - repeated ingestion of same URL/PDF
+  ROUND 4 FOCUS:
+  - Privacy & security controls:
+    - local-first assumptions
+    - redaction/sanitization controls for external LLM calls
+    - allowlist of folders/files that can be sent
+    - audit log of what was sent
+  - Threat model-lite:
+    - sensitive data leakage vectors
+    - mitigation requirements
+  - Failure modes and recovery:
+    - retries, backoff, rate limits
+    - partial ingestion rollback
+    - corrupted note handling
+  - Observability:
+    - ingestion logs
+    - delta report history
+    - metrics (ingestion time, delta size, errors)
 
   OUTPUT REQUIREMENT:
   - Output ONLY the updated SPEC.
