@@ -30,6 +30,19 @@ A **human-gated** multi-agent workflow for AI-assisted development. Unlike fully
 3. **Filesystem as state** — All logic lives in markdown files in your repo, not hidden databases
 4. **Human-gated handoffs** — You approve each agent transition (for now)
 
+## Model Routing
+
+Mycelium supports deterministic model routing for bug-interrupt handoffs:
+
+- If the mission progress includes `model:deep`, the orchestrator routes to a higher-reasoning model.
+- Default deep-route model: `openai/gpt-5`.
+
+Routing precedence (highest to lowest):
+
+1. Explicit CLI/API override (for example `mycelium-py run --model ...`)
+2. `model:deep` route (`MYCELIUM_MODEL_DEEP`, then `MYCELIUM_DEEP_MODEL`, then `openai/gpt-5`)
+3. Standard route (`MYCELIUM_MODEL`, else `anthropic/claude-sonnet-4-20250514`)
+
 ---
 
 ## Agent Roles

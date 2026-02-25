@@ -86,6 +86,20 @@ Agent state is tracked via labels:
 | `agent:maintainer` | Ready for cleanup |
 | (no agent label) | Work complete or needs assignment |
 
+### Model Routing Labels
+
+Orchestrator model selection also supports routing labels in mission progress context:
+
+| Label | Meaning |
+|-------|---------|
+| `model:deep` | Route the next run to a deep-reasoning model |
+
+Routing precedence:
+
+1. Explicit `--model` override
+2. `model:deep` route (`MYCELIUM_MODEL_DEEP`, then `MYCELIUM_DEEP_MODEL`, then `openai/gpt-5`)
+3. Normal route (`MYCELIUM_MODEL`, else `anthropic/claude-sonnet-4-20250514`)
+
 ## State Storage
 
 All state lives in `.beads/issues.jsonl`:

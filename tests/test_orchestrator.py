@@ -21,6 +21,7 @@ from mycelium.orchestrator import (
     VALID_AGENTS,
     append_llm_usage,
     check_hitl_approval,
+    extract_routing_labels,
     resolve_model_for_run,
     get_usage_summary,
     load_progress,
@@ -213,6 +214,25 @@ class TestGetUsageSummary:
 class TestModelRouting:
     """Tests for model routing policy in orchestrator."""
 
+    def test_extract_routing_labels_handles_mixed_shapes(self):
+        """Label extractor normalizes list/string/dict forms into a stable set."""
+        progress = {
+            "labels": "agent:scientist, model:deep",
+            "mission_context": {
+                "labels": ["needs:orchestrator", {"label": "model:deep"}],
+                "bead_labels": "interrupt root-cause",
+            },
+            "routing": {"label": "model:deep"},
+        }
+
+        labels = extract_routing_labels(progress)
+
+        assert "agent:scientist" in labels
+        assert "model:deep" in labels
+        assert "needs:orchestrator" in labels
+        assert "interrupt" in labels
+        assert "root-cause" in labels
+
     def test_resolve_model_override_wins(self, monkeypatch):
         """Explicit model override takes precedence over all routing signals."""
         monkeypatch.setenv("MYCELIUM_MODEL", "anthropic/claude-sonnet-4-20250514")
@@ -241,6 +261,29 @@ class TestModelRouting:
         monkeypatch.delenv("MYCELIUM_MODEL_DEEP", raising=False)
         monkeypatch.delenv("MYCELIUM_DEEP_MODEL", raising=False)
         progress = {"bead": {"labels": ["model:deep"]}}
+
+        model, source = resolve_model_for_run(progress, None)
+
+        assert model == DEFAULT_DEEP_MODEL
+        assert source == "model:deep:default"
+
+    def test_resolve_model_deep_from_nested_routing_label(self, monkeypatch):
+        """Nested routing.label also triggers deep-model selection."""
+        monkeypatch.delenv("MYCELIUM_MODEL", raising=False)
+        monkeypatch.setenv("MYCELIUM_DEEP_MODEL", "openai/o3")
+        progress = {"routing": {"label": "model:deep"}}
+
+        model, source = resolve_model_for_run(progress, None)
+
+        assert model == "openai/o3"
+        assert source == "model:deep:MYCELIUM_DEEP_MODEL"
+
+    def test_resolve_model_deep_from_string_labels(self, monkeypatch):
+        """Comma/space-delimited string labels still route correctly."""
+        monkeypatch.delenv("MYCELIUM_MODEL", raising=False)
+        monkeypatch.delenv("MYCELIUM_MODEL_DEEP", raising=False)
+        monkeypatch.delenv("MYCELIUM_DEEP_MODEL", raising=False)
+        progress = {"labels": "interrupt,root-cause model:deep"}
 
         model, source = resolve_model_for_run(progress, None)
 
