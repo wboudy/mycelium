@@ -285,10 +285,10 @@ def normalize_current_agent(raw_agent: Any) -> str:
                     return normalize_current_agent(value)
                 if value is None:
                     return ""
-                return str(value).strip()
-        return str(raw_agent).strip()
+                return str(value).strip().lower()
+        return str(raw_agent).strip().lower()
 
-    return str(raw_agent).strip()
+    return str(raw_agent).strip().lower()
 
 
 def append_llm_usage(
@@ -639,7 +639,23 @@ def get_usage_summary(mission_path: str | Path) -> dict[str, Any]:
     llm_usage_raw = progress.get("llm_usage")
     llm_usage: dict[str, Any] = llm_usage_raw if isinstance(llm_usage_raw, dict) else {}
     runs_raw = llm_usage.get("runs", [])
-    runs_detail = [run for run in runs_raw if isinstance(run, dict)] if isinstance(runs_raw, list) else []
+    runs_detail_raw = [run for run in runs_raw if isinstance(run, dict)] if isinstance(runs_raw, list) else []
+    runs_detail: list[dict[str, Any]] = []
+    for run in runs_detail_raw:
+        normalized_run = dict(run)
+        total_tokens_value = run.get("total_tokens", 0)
+        if isinstance(total_tokens_value, (int, float)):
+            normalized_run["total_tokens"] = int(total_tokens_value)
+        else:
+            normalized_run["total_tokens"] = 0
+
+        cost_value = run.get("cost_usd", 0.0)
+        if isinstance(cost_value, (int, float)):
+            normalized_run["cost_usd"] = float(cost_value)
+        else:
+            normalized_run["cost_usd"] = 0.0
+
+        runs_detail.append(normalized_run)
 
     total_tokens_raw = llm_usage.get("total_tokens", 0)
     if isinstance(total_tokens_raw, (int, float)):

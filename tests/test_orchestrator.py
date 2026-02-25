@@ -156,6 +156,11 @@ class TestNormalizeCurrentAgent:
         raw = {"current_agent": {"value": None}}
         assert normalize_current_agent(raw) == ""
 
+    def test_mixed_case_is_normalized_to_lowercase(self):
+        """Mixed-case agent values should normalize for validation."""
+        assert normalize_current_agent(" Scientist ") == "scientist"
+        assert normalize_current_agent({"current_agent": "ImPleMenter"}) == "implementer"
+
 
 class TestAppendLlmUsage:
     """Tests for append_llm_usage function."""
@@ -344,6 +349,33 @@ class TestGetUsageSummary:
         assert summary["total_cost_usd"] == 0.002
         assert summary["runs"] == 1
         assert summary["runs_detail"] == [{"total_tokens": 7, "cost_usd": 0.002}]
+
+    def test_runs_detail_numeric_fields_are_sanitized(self, temp_mission):
+        """runs_detail entries should always have numeric-safe fields for rendering."""
+        progress_file = temp_mission / "progress.yaml"
+        with open(progress_file) as f:
+            progress = yaml.safe_load(f)
+
+        progress["llm_usage"] = {
+            "runs": [
+                {"agent_role": "scientist", "total_tokens": "abc", "cost_usd": "bad"},
+                {"agent_role": "verifier", "total_tokens": 5.8, "cost_usd": 0.0042},
+            ],
+            "total_tokens": "invalid",
+            "total_cost_usd": "invalid",
+        }
+        with open(progress_file, "w") as f:
+            yaml.dump(progress, f)
+
+        summary = get_usage_summary(temp_mission)
+
+        assert summary["total_tokens"] == 5
+        assert summary["total_cost_usd"] == 0.0042
+        assert summary["runs"] == 2
+        assert summary["runs_detail"][0]["total_tokens"] == 0
+        assert summary["runs_detail"][0]["cost_usd"] == 0.0
+        assert summary["runs_detail"][1]["total_tokens"] == 5
+        assert summary["runs_detail"][1]["cost_usd"] == 0.0042
 
 
 class TestModelRouting:
@@ -574,6 +606,21 @@ class TestRunAgent:
 
         assert response.success is True
         assert "Mission complete" in response.content
+
+    def test_mixed_case_current_agent_executes_successfully(self, temp_mission):
+        """run_agent should accept mixed-case agent values via normalization."""
+        progress_file = temp_mission / "progress.yaml"
+        with open(progress_file) as f:
+            progress = yaml.safe_load(f)
+
+        progress["current_agent"] = "Scientist"
+        with open(progress_file, "w") as f:
+            yaml.dump(progress, f)
+
+        response = run_agent(temp_mission, dry_run=True)
+
+        assert response.success is True
+        assert "Prompt for scientist" in response.content
 
 
 class TestCliStatusParsing:
