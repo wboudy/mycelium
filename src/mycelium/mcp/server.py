@@ -143,7 +143,7 @@ def _read_progress(mission_path: str) -> dict[str, Any]:
         raise ValueError(f"Failed to parse YAML: {e}")
 
 
-def _update_progress(mission_path: str, section: str, data: dict[str, Any]) -> dict[str, Any]:
+def _update_progress(mission_path: str, section: str, data: Any) -> dict[str, Any]:
     """
     Update a specific section of a mission's progress.yaml file.
     
@@ -192,6 +192,9 @@ def _update_progress(mission_path: str, section: str, data: dict[str, Any]) -> d
             progress = yaml.safe_load(f) or {}
     except yaml.YAMLError as e:
         raise ValueError(f"Failed to parse existing YAML: {e}")
+
+    if not isinstance(progress, dict):
+        raise ValueError("Invalid progress.yaml format: expected YAML mapping/object root")
     
     # Update the section
     if section == "current_agent":
@@ -212,17 +215,36 @@ def _update_progress(mission_path: str, section: str, data: dict[str, Any]) -> d
                 
         progress["current_agent"] = str(val).strip()
         
-    elif isinstance(progress.get(section), list) and isinstance(data, dict) and "append" in data:
-        # Append to list sections (like implementer_log, verifier_report)
-        progress[section].append(data["append"])
-        
+    elif isinstance(progress.get(section), list):
+        # List sections support append operations or explicit list replacement.
+        if isinstance(data, dict):
+            if "append" in data:
+                progress[section].append(data["append"])
+            elif "replace" in data and isinstance(data["replace"], list):
+                progress[section] = data["replace"]
+            else:
+                raise ValueError(
+                    f"List section '{section}' update must include 'append' or list 'replace'"
+                )
+        elif isinstance(data, list):
+            progress[section] = data
+        else:
+            raise ValueError(
+                f"List section '{section}' update requires dict/list payload, got {type(data).__name__}"
+            )
+
     elif isinstance(progress.get(section), dict):
         # Merge dict sections
         # Validation: Prevent recursive wrapping (e.g. scientist_plan: { scientist_plan: ... })
         if isinstance(data, dict) and section in data and isinstance(data[section], dict):
             # The LLM wrapped the update in the section key name. Unwrap it.
             data = data[section]
-            
+
+        if not isinstance(data, dict):
+            raise ValueError(
+                f"Dict section '{section}' update requires mapping payload, got {type(data).__name__}"
+            )
+
         progress[section].update(data)
         
     else:

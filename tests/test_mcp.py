@@ -180,6 +180,50 @@ class TestUpdateProgress:
         assert result["mission_context"]["phase"] == "Testing"
         assert result["mission_context"]["new_field"] == "new_value"
 
+    def test_update_rejects_non_mapping_yaml_root(self, temp_dir):
+        """update_progress rejects progress.yaml roots that are not mappings."""
+        progress_file = temp_dir / "progress.yaml"
+        progress_file.write_text("- bad-root\n")
+
+        with pytest.raises(ValueError, match="expected YAML mapping/object root"):
+            update_progress(
+                str(temp_dir),
+                "mission_context",
+                {"phase": "x"},
+            )
+
+    def test_update_list_section_rejects_non_append_dict_payload(self, sample_progress_yaml):
+        """List sections should not be overwritten by malformed dict payloads."""
+        with pytest.raises(ValueError, match="must include 'append' or list 'replace'"):
+            update_progress(
+                str(sample_progress_yaml.parent),
+                "implementer_log",
+                {"entry": "not-valid"},
+            )
+
+        with open(sample_progress_yaml) as f:
+            saved = yaml.safe_load(f)
+        assert saved["implementer_log"] == []
+
+    def test_update_dict_section_requires_mapping_payload(self, sample_progress_yaml):
+        """Dict sections require mapping payloads for merge semantics."""
+        with pytest.raises(ValueError, match="requires mapping payload"):
+            update_progress(
+                str(sample_progress_yaml.parent),
+                "mission_context",
+                "not-a-dict",
+            )
+
+    def test_update_list_section_allows_list_replace(self, sample_progress_yaml):
+        """List sections can be explicitly replaced with list payloads."""
+        result = update_progress(
+            str(sample_progress_yaml.parent),
+            "implementer_log",
+            [{"step": "replace"}],
+        )
+
+        assert result["implementer_log"] == [{"step": "replace"}]
+
 
 # =============================================================================
 # Tests: list_files
