@@ -1,5 +1,5 @@
 # APR Workflow Configuration
-# Updated for Round 4 prompt
+# Updated for Round 5 prompt
 
 name: mycelium_spec
 description: "Mycelium Agentic Knowledge Vault spec workflow"
@@ -50,29 +50,23 @@ template: |
   - Do not invent repo-specific details not present in CURRENT_STATE.md.
   - Prefer structured lists/tables over long prose.
 
-  ROUND 4 TASK (Security/Privacy/Failure Modes/Observability):
-  Refine the SPEC to be production-grade on privacy, security, reliability, and operability.
+  ROUND 5 TASK (Acceptance Criteria + Test Plan + Spec Lint):
+  Finalize the SPEC by making it testable, consistent, and free of fluff.
 
-  ROUND 4 FOCUS:
-  - Privacy & security controls:
-    - local-first assumptions
-    - redaction/sanitization controls for external LLM calls
-    - allowlist of folders/files that can be sent
-    - audit log of what was sent
-  - Threat model-lite:
-    - sensitive data leakage vectors
-    - mitigation requirements
-  - Failure modes and recovery:
-    - retries, backoff, rate limits
-    - partial ingestion rollback
-    - corrupted note handling
-  - Observability:
-    - ingestion logs
-    - delta report history
-    - metrics (ingestion time, delta size, errors)
+  ROUND 5 FOCUS:
+  - Expand acceptance criteria into measurable checks per major feature.
+  - Add a complete test plan:
+    - unit/integration/e2e
+    - golden test fixtures for ingestion + delta reports
+    - regression tests for dedupe and idempotency
+  - Add “Spec Lint” pass:
+    - remove repetition
+    - convert vague statements into MUST + acceptance criteria or TODO questions
+    - ensure glossary covers all specialized terms
+    - ensure every interface has inputs/outputs/errors
 
   OUTPUT REQUIREMENT:
-  - Output ONLY the updated SPEC.
+  - Output ONLY the final SPEC.
 
 template_with_impl: |
   First, read this TARGET_VISION document (README slot):
@@ -108,26 +102,20 @@ template_with_impl: |
   - Do not invent repo-specific details not present in CURRENT_STATE.md.
   - Prefer structured lists/tables over long prose.
 
-  ROUND 4 TASK (Security/Privacy/Failure Modes/Observability):
-  Refine the SPEC to be production-grade on privacy, security, reliability, and operability.
+  ROUND 5 TASK (Acceptance Criteria + Test Plan + Spec Lint):
+  Finalize the SPEC by making it testable, consistent, and free of fluff.
 
-  ROUND 4 FOCUS:
-  - Privacy & security controls:
-    - local-first assumptions
-    - redaction/sanitization controls for external LLM calls
-    - allowlist of folders/files that can be sent
-    - audit log of what was sent
-  - Threat model-lite:
-    - sensitive data leakage vectors
-    - mitigation requirements
-  - Failure modes and recovery:
-    - retries, backoff, rate limits
-    - partial ingestion rollback
-    - corrupted note handling
-  - Observability:
-    - ingestion logs
-    - delta report history
-    - metrics (ingestion time, delta size, errors)
+  ROUND 5 FOCUS:
+  - Expand acceptance criteria into measurable checks per major feature.
+  - Add a complete test plan:
+    - unit/integration/e2e
+    - golden test fixtures for ingestion + delta reports
+    - regression tests for dedupe and idempotency
+  - Add “Spec Lint” pass:
+    - remove repetition
+    - convert vague statements into MUST + acceptance criteria or TODO questions
+    - ensure glossary covers all specialized terms
+    - ensure every interface has inputs/outputs/errors
 
   OUTPUT REQUIREMENT:
-  - Output ONLY the updated SPEC.
+  - Output ONLY the final SPEC.
