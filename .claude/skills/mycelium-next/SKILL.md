@@ -38,7 +38,7 @@ scientist → implementer → verifier → maintainer → complete
 | Label | Action |
 |-------|--------|
 | `agent:scientist` | Invoke `/mycelium-scientist` |
-| `agent:implementer` | Inform user: "Implementer phase - you implement, then run `/mycelium-next`" |
+| `agent:implementer` | Inform user: "Implementer phase - you implement. If a blocker bug appears, invoke `/mycelium-bug-interrupt` to split and switch context, then run `/mycelium-next` after resume." |
 | `agent:verifier` | Invoke `/mycelium-verifier` |
 | `agent:maintainer` | Invoke `/mycelium-maintainer` |
 | No agent label | Ask user which agent to start with |
