@@ -1,5 +1,5 @@
 # Orchestrator Handoff and Escalation Spec
-Version: 0.2
+Version: 0.3
 Status: Draft
 
 ## 1. Purpose
@@ -175,6 +175,8 @@ watcher_run:
   attempt: <int>
   result: success|retry|human_required
   error_class: <optional>
+  policy_version: <optional-policy-hash>
+  replay_artifact: <optional-run-file-path>
   timestamp: <ISO-8601 UTC>
 ```
 
@@ -189,6 +191,9 @@ watcher_run:
 7. Daily digest is generated and delivered during business hours with escalation summary.
 8. Duplicate human notifications for same signature are suppressed within dedupe window.
 9. Stale `RUNNING` beads are auto-reconciled without manual intervention.
+10. Watcher policy is loaded from versioned config and passes static validation before startup.
+11. Any executed handoff attempt is replayable in deterministic dry-run mode.
+12. Daily digest includes incident clusters with blast-radius ordering.
 
 ## 12. Out of Scope (This Spec)
 
@@ -268,6 +273,36 @@ watcher_run:
      - Human escalation rate
      - Mean time to recovery
      - Loop prevention interventions
+
+### 14.4 Selected Enhancements (Top 3)
+
+The following three additions were selected after evaluating ten candidates.
+
+1. Policy-as-code with static verifier.
+   - Source file: `.mycelium/orchestrator-policy.yaml`
+   - Startup hard-fail conditions:
+     - unreachable FSM states
+     - conflicting escalation rules
+     - overlapping time-window rules without precedence
+   - Persist policy hash in every `watcher_run.policy_version`.
+2. Deterministic replay harness ("flight recorder").
+   - Persist per-attempt run artifact:
+     - `.beads/orchestrator-runs/<handoff_key>/<attempt>.jsonl`
+   - Artifact must include:
+     - labels and notes snapshot
+     - evaluated policy hash
+     - local-time window decision path
+     - orchestrator command envelope (exit code, parsed status)
+   - Add command:
+     - `mycelium-py replay-handoff --run-file <path> --dry-run`
+3. Incident-cluster digest intelligence.
+   - Build derived incident graph keyed by `error_signature`.
+   - Cluster features:
+     - connected origin beads
+     - affected components (if labeled)
+     - escalation outcomes and age
+   - Daily digest ordering:
+     - cluster risk first (priority, spread, age, human impact)
 
 ## 15. Failure Modes and Mitigation Plan
 
@@ -370,3 +405,6 @@ watcher_run:
 6. Manual label corruption auto-normalization.
 7. Dead-letter transition after max retries.
 8. Daily digest generation with mixed severities and dedupe.
+9. Policy verifier rejects contradictory or unreachable rule sets.
+10. Replay harness reproduces identical transitions under deterministic inputs.
+11. Incident-cluster digest groups related signatures and ranks by blast radius.
