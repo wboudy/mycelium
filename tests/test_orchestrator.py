@@ -18,13 +18,13 @@ import yaml
 from mycelium.orchestrator import (
     DEFAULT_DEEP_MODEL,
     REQUIRES_APPROVAL,
-    VALID_AGENTS,
     append_llm_usage,
     check_hitl_approval,
     extract_routing_labels,
-    resolve_model_for_run,
     get_usage_summary,
     load_progress,
+    normalize_current_agent,
+    resolve_model_for_run,
     run_agent,
 )
 from mycelium.llm import CompletionResponse, DEFAULT_MODEL, UsageMetadata
@@ -119,6 +119,32 @@ class TestLoadProgress:
 
         with pytest.raises(ValueError, match="expected YAML mapping/object root"):
             load_progress(progress_file)
+
+
+class TestNormalizeCurrentAgent:
+    """Tests for normalize_current_agent helper."""
+
+    def test_plain_string(self):
+        """Returns stripped string for normal current_agent values."""
+        assert normalize_current_agent(" scientist ") == "scientist"
+
+    def test_nested_current_agent_dict(self):
+        """Unwraps nested current_agent dictionaries recursively."""
+        raw = {"current_agent": {"current_agent": "implementer"}}
+        assert normalize_current_agent(raw) == "implementer"
+
+    def test_value_key_dict(self):
+        """Supports malformed value-wrapped payloads."""
+        assert normalize_current_agent({"value": "verifier"}) == "verifier"
+
+    def test_agent_key_dict(self):
+        """Supports malformed agent-wrapped payloads."""
+        assert normalize_current_agent({"agent": "maintainer"}) == "maintainer"
+
+    def test_fallback_stringification_for_unknown_dict(self):
+        """Unknown dict payloads fall back to stable stringification."""
+        raw = {"unexpected": "shape"}
+        assert normalize_current_agent(raw) == str(raw).strip()
 
 
 class TestAppendLlmUsage:
@@ -508,6 +534,21 @@ class TestRunAgent:
         assert response.success is False
         assert response.error is not None
         assert "YAML format error" in response.error
+
+    def test_nested_current_agent_dict_is_normalized(self, temp_mission):
+        """run_agent should accept nested current_agent dict mistakes."""
+        progress_file = temp_mission / "progress.yaml"
+        with open(progress_file) as f:
+            progress = yaml.safe_load(f)
+
+        progress["current_agent"] = {"current_agent": {"value": "scientist"}}
+        with open(progress_file, "w") as f:
+            yaml.dump(progress, f)
+
+        response = run_agent(temp_mission, dry_run=True)
+
+        assert response.success is True
+        assert "Prompt for scientist" in response.content
 
 
 class TestCliHelp:

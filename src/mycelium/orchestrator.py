@@ -272,6 +272,20 @@ def resolve_model_for_run(progress: dict[str, Any], model_override: str | None) 
     return DEFAULT_MODEL, "default"
 
 
+def normalize_current_agent(raw_agent: Any) -> str:
+    """Normalize current_agent values that may be malformed by LLM writes."""
+    if isinstance(raw_agent, dict):
+        for key in ("current_agent", "value", "agent"):
+            if key in raw_agent:
+                value = raw_agent[key]
+                if isinstance(value, dict):
+                    return normalize_current_agent(value)
+                return str(value).strip()
+        return str(raw_agent).strip()
+
+    return str(raw_agent).strip()
+
+
 def append_llm_usage(
     progress: dict[str, Any],
     agent_role: str,
@@ -416,14 +430,7 @@ def run_agent(
         return CompletionResponse(success=False, error=f"YAML format error: {e}")
     
     # Get current agent
-    raw_agent = progress.get("current_agent", "")
-    if isinstance(raw_agent, dict):
-        if "current_agent" in raw_agent:
-            current_agent = str(raw_agent["current_agent"]).strip()
-        else:
-            current_agent = str(raw_agent).strip()
-    else:
-        current_agent = str(raw_agent).strip()
+    current_agent = normalize_current_agent(progress.get("current_agent", ""))
     
     if not current_agent:
         return CompletionResponse(

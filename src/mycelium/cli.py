@@ -67,7 +67,7 @@ def cmd_run(args: argparse.Namespace) -> int:
 
 def cmd_status(args: argparse.Namespace) -> int:
     """Execute the status command with LLM usage."""
-    from mycelium.orchestrator import get_usage_summary, load_progress
+    from mycelium.orchestrator import get_usage_summary, load_progress, normalize_current_agent
     
     mission_path = Path(args.mission_path)
     
@@ -86,7 +86,7 @@ def cmd_status(args: argparse.Namespace) -> int:
     
     # Mission info
     mission_name = mission_path.name if mission_path.is_dir() else mission_path.parent.name
-    current_agent = progress.get("current_agent", "")
+    current_agent = normalize_current_agent(progress.get("current_agent", ""))
     objective = progress.get("mission_context", {}).get("objective", "")
     
     print()
@@ -145,7 +145,12 @@ def cmd_auto(args: argparse.Namespace) -> int:
     """Execute auto-loop command - runs agents until mission complete or circuit breaker trips."""
     import os
     
-    from mycelium.orchestrator import get_usage_summary, load_progress, run_agent
+    from mycelium.orchestrator import (
+        get_usage_summary,
+        load_progress,
+        normalize_current_agent,
+        run_agent,
+    )
     
     mission_path = Path(args.mission_path)
     
@@ -179,18 +184,7 @@ def cmd_auto(args: argparse.Namespace) -> int:
             print(f"❌ Error loading progress: {e}", file=sys.stderr)
             return 1
         
-        raw_agent = progress.get("current_agent", "")
-        if isinstance(raw_agent, dict):
-            # Handle case where LLM wrote a nested dict or object
-            # Attempt to find the value or just convert to string
-            # Common failure: current_agent: { current_agent: "implementer" }
-            if "current_agent" in raw_agent:
-                current_agent = str(raw_agent["current_agent"]).strip()
-            else:
-                # Just take the first value or stringify
-                current_agent = str(raw_agent).strip()
-        else:
-            current_agent = str(raw_agent).strip()
+        current_agent = normalize_current_agent(progress.get("current_agent", ""))
         
         # Check completion
         if not current_agent:
@@ -390,4 +384,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     sys.exit(main())
-
