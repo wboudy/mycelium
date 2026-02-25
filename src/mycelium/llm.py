@@ -189,6 +189,39 @@ def _normalize_tool_call(raw_tool_call: Any, fallback_index: int) -> dict[str, A
     return {"id": call_id, "name": name, "arguments": arguments}
 
 
+def _normalize_message_content(raw_content: Any) -> str:
+    """Normalize provider message content to plain text."""
+    if raw_content is None:
+        return ""
+    if isinstance(raw_content, str):
+        return raw_content
+
+    if isinstance(raw_content, list):
+        normalized_parts: list[str] = []
+        for part in raw_content:
+            text_value: str | None = None
+            if isinstance(part, dict):
+                if isinstance(part.get("text"), str):
+                    text_value = part["text"]
+                elif isinstance(part.get("content"), str):
+                    text_value = part["content"]
+            else:
+                candidate_text = getattr(part, "text", None)
+                if isinstance(candidate_text, str):
+                    text_value = candidate_text
+
+            if text_value is None:
+                part_text = str(part).strip()
+                if part_text:
+                    normalized_parts.append(part_text)
+            elif text_value.strip():
+                normalized_parts.append(text_value.strip())
+
+        return "\n".join(normalized_parts).strip()
+
+    return str(raw_content)
+
+
 def complete(
     messages: list[dict[str, Any]],
     model: str = DEFAULT_MODEL,
@@ -287,7 +320,7 @@ def complete(
             
             # Extract response content
             message = response.choices[0].message
-            content = message.content or ""
+            content = _normalize_message_content(getattr(message, "content", ""))
             
             # Extract tool calls if present
             extracted_tool_calls = None

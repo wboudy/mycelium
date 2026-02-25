@@ -328,6 +328,32 @@ class TestComplete:
             {"id": "call-single", "name": "read_progress", "arguments": "{}"}
         ]
 
+    def test_normalizes_structured_message_content(self):
+        """Structured provider content payloads should be converted to plain text."""
+        mock_response = SimpleNamespace(
+            choices=[
+                SimpleNamespace(
+                    message=SimpleNamespace(
+                        content=[
+                            {"type": "text", "text": "Alpha"},
+                            SimpleNamespace(text="Beta"),
+                            {"content": "Gamma"},
+                        ],
+                        tool_calls=[],
+                    )
+                )
+            ],
+            usage=SimpleNamespace(prompt_tokens=5, completion_tokens=4, total_tokens=9),
+        )
+
+        with patch.dict("os.environ", {"ANTHROPIC_API_KEY": "sk-test"}):
+            with patch("mycelium.llm.litellm.completion", return_value=mock_response):
+                with patch("mycelium.llm._calculate_cost", return_value=0.001):
+                    response = complete(messages=[{"role": "user", "content": "Hello"}])
+
+        assert response.success is True
+        assert response.content == "Alpha\nBeta\nGamma"
+
     def test_no_retry_on_auth_error(self):
         """Does not retry on authentication errors."""
         import litellm
