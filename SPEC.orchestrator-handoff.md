@@ -1,5 +1,5 @@
 # Orchestrator Handoff and Escalation Spec
-Version: 0.2
+Version: 0.3
 Status: Draft
 
 ## 1. Purpose
@@ -175,6 +175,8 @@ watcher_run:
   attempt: <int>
   result: success|retry|human_required
   error_class: <optional>
+  policy_version: <optional-policy-hash>
+  replay_artifact: <optional-run-file-path>
   timestamp: <ISO-8601 UTC>
 ```
 
@@ -189,6 +191,9 @@ watcher_run:
 7. Daily digest is generated and delivered during business hours with escalation summary.
 8. Duplicate human notifications for same signature are suppressed within dedupe window.
 9. Stale `RUNNING` beads are auto-reconciled without manual intervention.
+10. Policy rules are loaded from versioned policy config and pass static validation checks.
+11. Any executed handoff attempt can be deterministically replayed in dry-run mode.
+12. Daily digest includes incident clusters and recurring-signature blast-radius signals.
 
 ## 12. Out of Scope (This Spec)
 
@@ -268,6 +273,32 @@ watcher_run:
      - Human escalation rate
      - Mean time to recovery
      - Loop prevention interventions
+
+### 14.4 Adopted High-Leverage Additions (Top 3)
+
+1. Add policy-as-code with static verifier.
+   - Source file: `.mycelium/orchestrator-policy.yaml`
+   - Watcher must refuse startup on:
+     - unreachable FSM states
+     - conflicting escalation rules
+     - overlapping time-window rules without priority
+   - Each watcher_run record includes `policy_version` hash.
+2. Add deterministic replay harness ("flight recorder").
+   - Persist run artifact for each attempt:
+     - `.beads/orchestrator-runs/<handoff_key>/<attempt>.jsonl`
+   - Include full decision inputs:
+     - labels, notes snapshot, policy hash, local time window evaluation, command exit envelope
+   - Add CLI target:
+     - `mycelium-py replay-handoff --run-file <path> --dry-run`
+3. Add incident graph intelligence for digest triage.
+   - Build derived graph keyed by `error_signature` with edges to:
+     - origin beads
+     - affected components (if tagged)
+     - escalation outcomes
+   - Daily digest must include:
+     - top connected incident clusters
+     - repeat offenders by signature
+     - cluster age and human-impact indicators
 
 ## 15. Failure Modes and Mitigation Plan
 
@@ -370,3 +401,21 @@ watcher_run:
 6. Manual label corruption auto-normalization.
 7. Dead-letter transition after max retries.
 8. Daily digest generation with mixed severities and dedupe.
+9. Policy static verifier rejects contradictory or unreachable rule sets.
+10. Replay harness produces identical transition/output under deterministic inputs.
+11. Incident graph clustering groups same-signature cascades and orders digest by cluster risk.
+
+## 17. Ten High-Leverage Additions
+
+Status key: `ADOPTED` = included in current plan, `BACKLOG` = candidate.
+
+1. Policy-as-code engine with static verifier (`ADOPTED`)
+2. Deterministic replay harness / flight recorder (`ADOPTED`)
+3. Incident graph intelligence + blast-radius digesting (`ADOPTED`)
+4. Tamper-evident audit chain for watcher_run events (`BACKLOG`)
+5. Canary rollout for new policies with shadow comparison (`BACKLOG`)
+6. Two-phase commit style handoff for external orchestrator invocations (`BACKLOG`)
+7. Adaptive risk-budget throttling per repo/team (`BACKLOG`)
+8. Automatic anomaly detection on escalation volume spikes (`BACKLOG`)
+9. Semantic near-duplicate signature clustering (beyond exact hash) (`BACKLOG`)
+10. Human feedback capture loop to tune trivial-fix thresholds (`BACKLOG`)
