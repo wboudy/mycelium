@@ -161,6 +161,19 @@ class TestNormalizeCurrentAgent:
         assert normalize_current_agent(" Scientist ") == "scientist"
         assert normalize_current_agent({"current_agent": "ImPleMenter"}) == "implementer"
 
+    def test_collection_payload_selects_first_meaningful_value(self):
+        """Collection payloads should skip malformed entries and find a valid agent."""
+        raw_list = [{"unexpected": "shape"}, {"value": "Verifier"}]
+        raw_tuple = (None, {"current_agent": "Maintainer"})
+
+        assert normalize_current_agent(raw_list) == "verifier"
+        assert normalize_current_agent(raw_tuple) == "maintainer"
+
+    def test_set_payload_selects_first_sorted_meaningful_value(self):
+        """Set payloads should normalize deterministically across runs."""
+        raw_set = {"", "ImPlementer"}
+        assert normalize_current_agent(raw_set) == "implementer"
+
 
 class TestAppendLlmUsage:
     """Tests for append_llm_usage function."""
@@ -243,6 +256,51 @@ class TestAppendLlmUsage:
         assert len(result["llm_usage"]["runs"]) == 1
         assert result["llm_usage"]["total_tokens"] == 10
         assert result["llm_usage"]["total_cost_usd"] == 0.001
+
+    def test_coerces_numeric_like_runs_and_clamps_negative_values(self):
+        """Existing run totals should coerce numeric strings and ignore negatives."""
+        progress = {
+            "llm_usage": {
+                "runs": [
+                    {"agent_role": "scientist", "total_tokens": "120", "cost_usd": "0.0035"},
+                    {"agent_role": "verifier", "total_tokens": -5, "cost_usd": "-0.2"},
+                    {"agent_role": "maintainer", "total_tokens": "bad", "cost_usd": "oops"},
+                ]
+            }
+        }
+        response = CompletionResponse(
+            content="Test",
+            usage=UsageMetadata(total_tokens=10, cost_usd=0.001),
+            success=True,
+        )
+
+        result = append_llm_usage(progress, "implementer", response)
+
+        assert result["llm_usage"]["total_tokens"] == 130
+        assert result["llm_usage"]["total_cost_usd"] == 0.0045
+
+    def test_clamps_negative_response_usage_to_zero(self):
+        """Malformed negative usage from response should not reduce cumulative totals."""
+        progress = {"llm_usage": {"runs": []}}
+        response = CompletionResponse(
+            content="Test",
+            usage=UsageMetadata(
+                prompt_tokens=-2,
+                completion_tokens=-3,
+                total_tokens=-5,
+                cost_usd=-0.9,
+            ),
+            success=True,
+        )
+
+        result = append_llm_usage(progress, "scientist", response)
+
+        assert result["llm_usage"]["total_tokens"] == 0
+        assert result["llm_usage"]["total_cost_usd"] == 0.0
+        assert result["llm_usage"]["runs"][0]["prompt_tokens"] == 0
+        assert result["llm_usage"]["runs"][0]["completion_tokens"] == 0
+        assert result["llm_usage"]["runs"][0]["total_tokens"] == 0
+        assert result["llm_usage"]["runs"][0]["cost_usd"] == 0.0
 
 
 class TestCheckHitlApproval:
@@ -376,6 +434,53 @@ class TestGetUsageSummary:
         assert summary["runs_detail"][0]["cost_usd"] == 0.0
         assert summary["runs_detail"][1]["total_tokens"] == 5
         assert summary["runs_detail"][1]["cost_usd"] == 0.0042
+
+    def test_numeric_like_totals_are_coerced(self, temp_mission):
+        """String totals should be parsed when they represent valid numeric values."""
+        progress_file = temp_mission / "progress.yaml"
+        with open(progress_file) as f:
+            progress = yaml.safe_load(f)
+
+        progress["llm_usage"] = {
+            "runs": [{"agent_role": "scientist", "total_tokens": "7", "cost_usd": "0.002"}],
+            "total_tokens": "12",
+            "total_cost_usd": "0.005",
+        }
+        with open(progress_file, "w") as f:
+            yaml.dump(progress, f)
+
+        summary = get_usage_summary(temp_mission)
+
+        assert summary["total_tokens"] == 12
+        assert summary["total_cost_usd"] == 0.005
+        assert summary["runs_detail"][0]["total_tokens"] == 7
+        assert summary["runs_detail"][0]["cost_usd"] == 0.002
+
+    def test_negative_totals_fall_back_to_sanitized_runs(self, temp_mission):
+        """Negative totals should be treated as invalid and recomputed from runs."""
+        progress_file = temp_mission / "progress.yaml"
+        with open(progress_file) as f:
+            progress = yaml.safe_load(f)
+
+        progress["llm_usage"] = {
+            "runs": [
+                {"agent_role": "scientist", "total_tokens": "4", "cost_usd": "0.001"},
+                {"agent_role": "verifier", "total_tokens": "-3", "cost_usd": "-0.2"},
+            ],
+            "total_tokens": -99,
+            "total_cost_usd": "-2.0",
+        }
+        with open(progress_file, "w") as f:
+            yaml.dump(progress, f)
+
+        summary = get_usage_summary(temp_mission)
+
+        assert summary["total_tokens"] == 4
+        assert summary["total_cost_usd"] == 0.001
+        assert summary["runs_detail"][0]["total_tokens"] == 4
+        assert summary["runs_detail"][0]["cost_usd"] == 0.001
+        assert summary["runs_detail"][1]["total_tokens"] == 0
+        assert summary["runs_detail"][1]["cost_usd"] == 0.0
 
 
 class TestModelRouting:
@@ -614,6 +719,21 @@ class TestRunAgent:
             progress = yaml.safe_load(f)
 
         progress["current_agent"] = "Scientist"
+        with open(progress_file, "w") as f:
+            yaml.dump(progress, f)
+
+        response = run_agent(temp_mission, dry_run=True)
+
+        assert response.success is True
+        assert "Prompt for scientist" in response.content
+
+    def test_collection_current_agent_payload_is_normalized(self, temp_mission):
+        """run_agent should recover from list/tuple current_agent malformed payloads."""
+        progress_file = temp_mission / "progress.yaml"
+        with open(progress_file) as f:
+            progress = yaml.safe_load(f)
+
+        progress["current_agent"] = [{"unexpected": "shape"}, {"current_agent": "Scientist"}]
         with open(progress_file, "w") as f:
             yaml.dump(progress, f)
 

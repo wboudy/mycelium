@@ -12,6 +12,7 @@ Manages the execution of agents by:
 from __future__ import annotations
 
 import logging
+import math
 import os
 import sys
 from datetime import datetime, timezone
@@ -274,21 +275,80 @@ def resolve_model_for_run(progress: dict[str, Any], model_override: str | None) 
 
 def normalize_current_agent(raw_agent: Any) -> str:
     """Normalize current_agent values that may be malformed by LLM writes."""
-    if raw_agent is None:
-        return ""
+    def _normalize(value: Any, allow_fallback_stringify: bool) -> str:
+        if value is None:
+            return ""
 
-    if isinstance(raw_agent, dict):
-        for key in ("current_agent", "value", "agent"):
-            if key in raw_agent:
-                value = raw_agent[key]
-                if isinstance(value, dict):
-                    return normalize_current_agent(value)
-                if value is None:
-                    return ""
+        if isinstance(value, dict):
+            saw_agent_key = False
+            for key in ("current_agent", "value", "agent"):
+                if key in value:
+                    saw_agent_key = True
+                    normalized = _normalize(value[key], allow_fallback_stringify=False)
+                    if normalized:
+                        return normalized
+            if saw_agent_key:
+                return ""
+            if allow_fallback_stringify:
                 return str(value).strip().lower()
-        return str(raw_agent).strip().lower()
+            return ""
 
-    return str(raw_agent).strip().lower()
+        if isinstance(value, (list, tuple)):
+            for item in value:
+                normalized = _normalize(item, allow_fallback_stringify=False)
+                if normalized:
+                    return normalized
+            return ""
+
+        if isinstance(value, set):
+            for item in sorted(value, key=str):
+                normalized = _normalize(item, allow_fallback_stringify=False)
+                if normalized:
+                    return normalized
+            return ""
+
+        return str(value).strip().lower()
+
+    return _normalize(raw_agent, allow_fallback_stringify=True)
+
+
+def _parse_numeric(value: Any) -> float | None:
+    """Parse int/float-like inputs into finite floats."""
+    if value is None or isinstance(value, bool):
+        return None
+
+    if isinstance(value, (int, float)):
+        parsed = float(value)
+    elif isinstance(value, str):
+        stripped = value.strip()
+        if not stripped:
+            return None
+        try:
+            parsed = float(stripped)
+        except ValueError:
+            return None
+    else:
+        return None
+
+    if not math.isfinite(parsed):
+        return None
+    return parsed
+
+
+def _coerce_non_negative_int(value: Any) -> int:
+    """Parse to non-negative int with invalid/negative values clamped to 0."""
+    parsed = _parse_numeric(value)
+    if parsed is None or parsed < 0:
+        return 0
+    return int(parsed)
+
+
+def _coerce_non_negative_float(value: Any) -> float:
+    """Parse to non-negative float with invalid/negative values clamped to 0."""
+    parsed = _parse_numeric(value)
+    if parsed is None or parsed < 0:
+        return 0.0
+    return float(parsed)
 
 
 def append_llm_usage(
@@ -329,10 +389,10 @@ def append_llm_usage(
     run_entry = {
         "agent_role": agent_role,
         "model": response.usage.model,
-        "prompt_tokens": response.usage.prompt_tokens,
-        "completion_tokens": response.usage.completion_tokens,
-        "total_tokens": response.usage.total_tokens,
-        "cost_usd": round(response.usage.cost_usd, 6),
+        "prompt_tokens": _coerce_non_negative_int(response.usage.prompt_tokens),
+        "completion_tokens": _coerce_non_negative_int(response.usage.completion_tokens),
+        "total_tokens": _coerce_non_negative_int(response.usage.total_tokens),
+        "cost_usd": round(_coerce_non_negative_float(response.usage.cost_usd), 6),
         "timestamp": datetime.now(timezone.utc).isoformat(),
         "success": response.success,
     }
@@ -345,15 +405,13 @@ def append_llm_usage(
     
     # Update totals
     llm_usage["total_tokens"] = sum(
-        int(r.get("total_tokens", 0))
+        _coerce_non_negative_int(r.get("total_tokens", 0))
         for r in llm_usage["runs"]
-        if isinstance(r.get("total_tokens", 0), (int, float))
     )
     llm_usage["total_cost_usd"] = round(
         sum(
-            float(r.get("cost_usd", 0.0))
+            _coerce_non_negative_float(r.get("cost_usd", 0.0))
             for r in llm_usage["runs"]
-            if isinstance(r.get("cost_usd", 0.0), (int, float))
         ),
         6,
     )
@@ -643,42 +701,31 @@ def get_usage_summary(mission_path: str | Path) -> dict[str, Any]:
     runs_detail: list[dict[str, Any]] = []
     for run in runs_detail_raw:
         normalized_run = dict(run)
-        total_tokens_value = run.get("total_tokens", 0)
-        if isinstance(total_tokens_value, (int, float)):
-            normalized_run["total_tokens"] = int(total_tokens_value)
-        else:
-            normalized_run["total_tokens"] = 0
-
-        cost_value = run.get("cost_usd", 0.0)
-        if isinstance(cost_value, (int, float)):
-            normalized_run["cost_usd"] = float(cost_value)
-        else:
-            normalized_run["cost_usd"] = 0.0
+        normalized_run["total_tokens"] = _coerce_non_negative_int(run.get("total_tokens", 0))
+        normalized_run["cost_usd"] = _coerce_non_negative_float(run.get("cost_usd", 0.0))
 
         runs_detail.append(normalized_run)
 
-    total_tokens_raw = llm_usage.get("total_tokens", 0)
-    if isinstance(total_tokens_raw, (int, float)):
-        total_tokens = int(total_tokens_raw)
-    else:
+    total_tokens_raw = _parse_numeric(llm_usage.get("total_tokens", 0))
+    if total_tokens_raw is None or total_tokens_raw < 0:
         total_tokens = sum(
-            int(r.get("total_tokens", 0))
+            _coerce_non_negative_int(r.get("total_tokens", 0))
             for r in runs_detail
-            if isinstance(r.get("total_tokens", 0), (int, float))
         )
-
-    total_cost_raw = llm_usage.get("total_cost_usd", 0.0)
-    if isinstance(total_cost_raw, (int, float)):
-        total_cost_usd = float(total_cost_raw)
     else:
+        total_tokens = int(total_tokens_raw)
+
+    total_cost_raw = _parse_numeric(llm_usage.get("total_cost_usd", 0.0))
+    if total_cost_raw is None or total_cost_raw < 0:
         total_cost_usd = round(
             sum(
-                float(r.get("cost_usd", 0.0))
+                _coerce_non_negative_float(r.get("cost_usd", 0.0))
                 for r in runs_detail
-                if isinstance(r.get("cost_usd", 0.0), (int, float))
             ),
             6,
         )
+    else:
+        total_cost_usd = float(total_cost_raw)
     
     return {
         "total_tokens": total_tokens,
