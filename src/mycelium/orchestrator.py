@@ -264,7 +264,11 @@ def resolve_model_for_run(progress: dict[str, Any], model_override: str | None) 
                 return configured, f"{DEEP_MODEL_LABEL}:{env_key}"
         return DEFAULT_DEEP_MODEL, f"{DEEP_MODEL_LABEL}:default"
 
-    return os.environ.get("MYCELIUM_MODEL", DEFAULT_MODEL), "default"
+    default_model = os.environ.get("MYCELIUM_MODEL", "").strip()
+    if default_model:
+        return default_model, "default"
+
+    return DEFAULT_MODEL, "default"
 
 
 def append_llm_usage(
@@ -600,7 +604,7 @@ def get_usage_summary(mission_path: str | Path) -> dict[str, Any]:
     try:
         progress = load_progress(mission_path)
     except (FileNotFoundError, yaml.YAMLError, ValueError):
-        return {"total_tokens": 0, "total_cost_usd": 0.0, "runs": 0}
+        return {"total_tokens": 0, "total_cost_usd": 0.0, "runs": 0, "runs_detail": []}
     
     llm_usage = progress.get("llm_usage", {})
     

@@ -201,6 +201,7 @@ class TestGetUsageSummary:
         assert summary["total_tokens"] == 0
         assert summary["total_cost_usd"] == 0.0
         assert summary["runs"] == 0
+        assert summary["runs_detail"] == []
 
     def test_with_usage_data(self, temp_mission):
         """Returns correct totals when usage data exists."""
@@ -226,6 +227,18 @@ class TestGetUsageSummary:
         assert summary["total_tokens"] == 3000
         assert summary["total_cost_usd"] == 0.09
         assert summary["runs"] == 2
+
+    def test_invalid_progress_returns_stable_empty_schema(self, temp_mission):
+        """Error paths should still return the full usage-summary shape."""
+        progress_file = temp_mission / "progress.yaml"
+        progress_file.write_text("- invalid-root\n")
+
+        summary = get_usage_summary(temp_mission)
+
+        assert summary["total_tokens"] == 0
+        assert summary["total_cost_usd"] == 0.0
+        assert summary["runs"] == 0
+        assert summary["runs_detail"] == []
 
 
 class TestModelRouting:
@@ -310,6 +323,16 @@ class TestModelRouting:
     def test_resolve_model_without_deep_label_uses_standard_default(self, monkeypatch):
         """Without model:deep, orchestrator uses normal model resolution."""
         monkeypatch.delenv("MYCELIUM_MODEL", raising=False)
+        progress = {"mission_context": {"labels": ["agent:scientist"]}}
+
+        model, source = resolve_model_for_run(progress, None)
+
+        assert model == DEFAULT_MODEL
+        assert source == "default"
+
+    def test_resolve_model_ignores_blank_default_model_env(self, monkeypatch):
+        """Blank MYCELIUM_MODEL should be treated as unset."""
+        monkeypatch.setenv("MYCELIUM_MODEL", "   ")
         progress = {"mission_context": {"labels": ["agent:scientist"]}}
 
         model, source = resolve_model_for_run(progress, None)
