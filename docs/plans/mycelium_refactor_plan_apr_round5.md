@@ -1,5 +1,5 @@
 # Mycelium Agentic Knowledge Vault Specification
-Version: 1.0  
+Version: 1.1  
 Status: Final
 
 ## 1. Overview
@@ -38,6 +38,10 @@ Mycelium is a local-first, Obsidian-compatible knowledge vault. Markdown notes a
 | Delta Report | A durable artifact summarizing delta categories, novelty scoring, link proposals, and follow-ups for one Run ID. |
 | Review Queue | A set of proposed actions requiring explicit human decision before canonical changes. |
 | Review Queue Item | One proposed action (e.g., “promote this claim”, “merge provenance”, “create concept note”). |
+| Review Digest | A reading-first nightly artifact grouping Review Queue Items by source with claim cards, citations, and proposed canonical impacts. |
+| Review Packet | The per-source section within a Review Digest that supports source-level decisions and optional claim-level drill-down. |
+| Hold Decision | A reviewer choice that defers apply without rejecting; queue items remain `pending_review` and are resurfaced later. |
+| Auto-Approval Lane | A constrained policy that auto-approves only low-risk, non-semantic proposals while keeping semantic changes in human review. |
 | Promotion | The explicit transition that applies approved changes and sets affected notes to `status: canon`. |
 | Frontier | A ranked view of unclear, weakly supported, conflicting, or prerequisite-gap topics. |
 | Context Pack | A bounded, citation-backed bundle of notes/claims/sources assembled for a user goal. |
@@ -96,6 +100,7 @@ The Vault uses vault-relative paths. The following layout is the default.
 |---|---|---|
 | `Inbox/Sources/` | Derived (draft scope) | Draft Source Notes and staged extraction artifacts. |
 | `Inbox/ReviewQueue/` | Derived (draft scope) | Review Queue Items awaiting human decision. |
+| `Inbox/ReviewDigest/` | Derived (draft scope) | Nightly review digests and packet-level decision records. |
 | `Sources/` | Canonical | Canonical Source Notes. |
 | `Claims/` | Canonical | Canonical Claim Notes. |
 | `Concepts/` | Canonical | Canonical Concept Notes. |
@@ -165,12 +170,27 @@ All Notes are Markdown with YAML frontmatter.
 |---|---:|:---:|
 | `source_id` | string | Yes |
 | `source_ref` | string | Yes |
-| `locator` | string or object | Yes |
+| `locator` | object | Yes |
+
+`provenance.locator` minima (MVP1 decision):
+- For `source_kind: url`:
+  - `url: string`
+  - `section: string|null`
+  - `paragraph_index: int|null`
+  - `snippet_hash: string` (`sha256:<hex>`)
+- For `source_kind: pdf`:
+  - `pdf_ref: string`
+  - `page: int`
+  - `section: string|null`
+  - `snippet_hash: string` (`sha256:<hex>`)
+- For other source kinds in MVP1 (`doi|arxiv|highlights|book|text_bundle`), `locator` MAY be a minimal object with `raw_locator: string`; stricter structured minima are deferred to MVP2.
 
 **Acceptance Criteria**
 - AC-SCH-003-1: Validator rejects Claim Notes with empty `claim_text` (after trimming whitespace).
 - AC-SCH-003-2: Validator rejects Claim Notes missing `provenance.source_id`, `provenance.source_ref`, or `provenance.locator`.
 - AC-SCH-003-3: Claim Notes promoted to canon (via Promotion) always have at least one outbound Obsidian Wikilink to a Source Note.
+- AC-SCH-003-4: For URL/PDF sources, validator rejects `provenance.locator` missing required structured fields or invalid `snippet_hash` format.
+- AC-SCH-003-5: For non-URL/PDF MVP1 source kinds, validator accepts `raw_locator` object and emits a warning indicating deferred locator strictness.
 
 #### 4.2.4 Concept Note Schema
 **Requirement SCH-004:** A Concept Note MUST include `term: string` in addition to the shared schema.
@@ -197,9 +217,12 @@ Required keys:
 - `source_id: string`
 - `created_at: datetime (ISO-8601 UTC)`
 - `source_revision: object` (see below)
+- `pipeline_status: enum` (`completed|failed_after_extraction|failed_before_extraction`)
 - `counts: object` (see below)
 - `novelty_score: number` (range `[0..1]`)
 - `match_groups: object` with arrays for each Match Class (see below)
+- `warnings: array`
+- `failures: array`
 - `new_links: array`
 - `follow_up_questions: array`
 
@@ -227,6 +250,8 @@ Required keys:
 - AC-SCH-006-1: After any ingestion attempt that reaches extraction, a Delta Report exists for the Run ID even if later stages fail (with failures recorded; see §10).
 - AC-SCH-006-2: Delta Report YAML always includes the required keys and includes empty arrays explicitly (keys are present even if arrays are empty).
 - AC-SCH-006-3: Validator rejects Delta Reports with `novelty_score` outside `[0..1]`.
+- AC-SCH-006-4: Delta Report always includes `warnings` and `failures` arrays; empty arrays are explicit when no entries exist.
+- AC-SCH-006-5: `pipeline_status` is `completed` on successful runs, `failed_after_extraction` when failure occurs after extraction begins, and `failed_before_extraction` otherwise.
 
 #### 4.2.7 Review Queue Item Schema
 Review Queue Items are written under `Inbox/ReviewQueue/`.
@@ -249,11 +274,16 @@ Required keys:
 
 ### 4.3 Naming and Link Rules
 #### 4.3.1 Note ID and filename alignment
-**Requirement NAM-001:** `id` MUST be lowercase kebab-case OR a hash identifier prefixed with `h-` (e.g., `h-<hex>`). The Markdown filename MUST equal `<id>.md`.
+**Requirement NAM-001:** `id` MUST be one of:
+- lowercase kebab-case slug, or
+- hash identifier prefixed with `h-` (`h-<hex>`), or
+- hybrid slug+hash form `<slug>--h-<12hex>` for machine-generated notes.
+The Markdown filename MUST equal `<id>.md`.
 
 **Acceptance Criteria**
 - AC-NAM-001-1: Validator rejects Notes where filename and `id` differ.
 - AC-NAM-001-2: Validator rejects `id` strings outside allowed patterns.
+- AC-NAM-001-3: Machine-generated notes default to hybrid `<slug>--h-<12hex>` unless an explicit migration compatibility mode is enabled.
 
 #### 4.3.2 Wikilink resolution
 **Requirement LNK-001:** In strict mode, all Obsidian Wikilinks in canonical directories MUST resolve to an existing Note path.
@@ -380,12 +410,76 @@ Errors:
 - AC-CMD-DEL-001-1: `data.match_groups` includes keys `EXACT`, `NEAR_DUPLICATE`, `SUPPORTING`, `CONTRADICTING`, `NEW`.
 - AC-CMD-DEL-001-2: `data.counts.total_extracted_claims` equals the sum of the five match class counts in the Delta Report.
 
-#### 5.2.3 `graduate`
+#### 5.2.3 `review`
 Input:
 - One of:
   - `queue_id: string`
   - `queue_item_paths: array[string]`
-  - `all_reviewed: boolean`
+  - `digest_path: string`
+- Decision mode:
+  - direct mode (`queue_id`/`queue_item_paths`): `decision: enum` (`approve|reject|hold`)
+  - digest mode (`digest_path`): decisions loaded from packet records
+- Optional:
+  - `reason: string`
+  - `actor: string`
+
+Output `data`:
+- `updated: array[{queue_id, old_status, new_status}]`
+- `held: array[{queue_id, hold_until}]`
+- `decision_record_path: string`
+
+Side effects:
+- Applies explicit state transitions for queue items.
+- Writes decision records under `Inbox/ReviewDigest/`.
+
+Errors:
+- `ERR_QUEUE_ITEM_INVALID`
+- `ERR_QUEUE_IMMUTABLE`
+- `ERR_REVIEW_DECISION_INVALID`
+
+**Requirement CMD-REV-001:** `review` MUST be the authoritative state transition operation for queue decisions.
+
+**Acceptance Criteria**
+- AC-CMD-REV-001-1: Legal transitions are limited to `pending_review -> approved` and `pending_review -> rejected`; any mutation attempt on non-pending items returns `ERR_QUEUE_IMMUTABLE`.
+- AC-CMD-REV-001-2: `decision=hold` does not mutate queue `status`; it records deferred review metadata and keeps the item pending.
+- AC-CMD-REV-001-3: For digest mode, every packet decision maps deterministically to queue item outcomes.
+
+#### 5.2.4 `review_digest`
+Input:
+- Optional:
+  - `date: string` (YYYY-MM-DD; default=today)
+  - `run_ids: array[string]`
+  - `limit_sources: int`
+  - `include_claim_cards: boolean` (default=true)
+
+Output `data`:
+- `digest_path: string`
+- `packet_paths: array[string]`
+- `source_count: int`
+- `pending_item_count: int`
+
+Side effects:
+- Writes a nightly digest under `Inbox/ReviewDigest/`.
+- Writes per-source packet sections with citations and proposed canonical-impact summaries.
+
+Errors:
+- `ERR_REVIEW_DIGEST_EMPTY`
+- `ERR_SCHEMA_VALIDATION`
+
+**Requirement CMD-RDG-001:** `review_digest` MUST produce a reading-first nightly artifact grouped by source, with optional claim-level drill-down.
+
+**Acceptance Criteria**
+- AC-CMD-RDG-001-1: A digest with pending items includes one packet per source and each packet lists claim cards with citations.
+- AC-CMD-RDG-001-2: Packet decisions support `approve_all`, `approve_selected`, `hold`, and `reject`.
+- AC-CMD-RDG-001-3: Digest generation is deterministic for the same snapshot in deterministic test mode.
+
+#### 5.2.5 `graduate`
+Input:
+- One of:
+  - `queue_id: string`
+  - `queue_item_paths: array[string]`
+  - `all_approved: boolean`
+  - `from_digest: string` (apply packet decisions from digest path)
 - Optional:
   - `dry_run: boolean`
   - `strict: boolean`
@@ -393,6 +487,7 @@ Input:
 Output `data`:
 - `promoted: array[{queue_id, from_path, to_path}]`
 - `rejected: array[{queue_id, reason}]`
+- `skipped: array[{queue_id, reason}]`
 - `audit_event_ids: array[string]`
 
 Side effects:
@@ -411,8 +506,10 @@ Errors:
 **Acceptance Criteria**
 - AC-CMD-GRD-001-1: If a queue item fails validation, that item results in no canonical changes while other valid items may still be promoted (per-item atomicity).
 - AC-CMD-GRD-001-2: On success, each promoted Note has `status: canon` and resides in a canonical directory.
+- AC-CMD-GRD-001-3: Mutating `graduate` runs MUST enforce strict validation; non-strict mode is permitted only when `dry_run=true`.
+- AC-CMD-GRD-001-4: `from_digest` applies only items explicitly approved by packet decisions; held items remain pending.
 
-#### 5.2.4 `context`
+#### 5.2.6 `context`
 Input:
 - Optional:
   - `goal: string`
@@ -438,7 +535,7 @@ Errors:
 - AC-CMD-CTX-001-1: Returned `items.length` is `<= limit` when `limit` is provided.
 - AC-CMD-CTX-001-2: Every returned item includes at least one citation that resolves to an existing Note path.
 
-#### 5.2.5 `frontier`
+#### 5.2.7 `frontier`
 Input:
 - Optional:
   - `project: string`
@@ -449,7 +546,7 @@ Output `data`:
 - `conflicts: array[...]`
 - `weak_support: array[...]`
 - `open_questions: array[...]`
-- `reading_targets: array[...]` (ranked)
+- `reading_targets: array[{target, score, rationale, citations, factors}]` (ranked)
 - `explanations: object` (ranking factors)
 
 Side effects: none.
@@ -463,10 +560,23 @@ Errors:
 - AC-CMD-FRN-001-1: In a seeded Vault fixture containing at least one contradiction and one question, `conflicts.length>=1` and `open_questions.length>=1`.
 - AC-CMD-FRN-001-2: `reading_targets` is sorted by an explicit numeric rank/score field included per target.
 
-#### 5.2.6 `connect`, `trace`, `ideas`
+**Requirement CMD-FRN-002:** `frontier` scoring MUST be deterministic and use the weighted formula below:
+`score = 100 * (0.35*conflict_factor + 0.25*support_gap + 0.20*goal_relevance + 0.10*novelty + 0.10*staleness)`
+
+Factor constraints:
+- each factor is in `[0..1]`
+- score is clamped to `[0..100]`
+- ties are resolved by `(higher conflict_factor, older last_reviewed_at, lexical target id)`
+
+**Acceptance Criteria**
+- AC-CMD-FRN-002-1: For a deterministic fixture, repeated frontier runs return byte-identical `reading_targets` ordering and scores.
+- AC-CMD-FRN-002-2: Each reading target includes `factors` with all five factor components and values in `[0..1]`.
+- AC-CMD-FRN-002-3: If two targets have equal score, tie-break ordering follows the defined deterministic order.
+
+#### 5.2.8 `connect`, `trace`, `ideas`
 These commands are part of later milestones and may be implemented after MVP2.
 
-**Requirement CMD-FUT-001:** If implemented, each of `connect`, `trace`, and `ideas` MUST conform to IF-001 Output Envelope and define inputs/outputs/errors in this section before being considered complete.
+**Requirement CMD-FUT-001:** If implemented, each of `connect`, `trace`, and `ideas` MUST conform to IF-001 Output Envelope and define inputs/outputs/side effects/errors in this section before being considered complete.
 
 **Acceptance Criteria**
 - AC-CMD-FUT-001-1: For each implemented command, the spec section includes a complete contract: inputs, outputs, side effects, and errors.
@@ -488,36 +598,43 @@ The following internal interfaces are required (implementation language/library 
 1) Capture  
 Input: Source input (`url` / `pdf_path` / `id` / `text_bundle`)  
 Output: `RawSourcePayload { bytes|text, media_type, source_ref, source_kind }`  
+Side effects: May create transient capture cache entries in draft scope only.
 Errors: `ERR_CAPTURE_FAILED`, `ERR_UNSUPPORTED_SOURCE`
 
 2) Normalize  
 Input: RawSourcePayload  
 Output: `NormalizedSource { normalized_text, normalized_locator, source_kind, source_ref, extracted_metadata }`  
+Side effects: None (pure transform).
 Errors: `ERR_NORMALIZATION_FAILED`
 
 3) Fingerprint  
 Input: NormalizedSource  
 Output: `SourceIdentity { normalized_locator, fingerprint }`  
+Side effects: Reads/writes source identity index under `Indexes/`.
 Errors: `ERR_NORMALIZATION_FAILED`
 
 4) Extract  
 Input: NormalizedSource  
 Output: `ExtractionBundle { gist, bullets, claims[], entities[], definitions[] }`  
+Side effects: Writes extraction bundle artifacts under `Inbox/Sources/`.
 Errors: `ERR_EXTRACTION_FAILED`, `ERR_SCHEMA_VALIDATION`
 
 5) Compare (Dedupe)  
 Input: `claims[]`, current claim index/snapshot  
 Output: `MatchResults[]` with Match Class per claim  
+Side effects: Reads claim index snapshot; no canonical writes.
 Errors: `ERR_INDEX_UNAVAILABLE` (if index read fails), `ERR_SCHEMA_VALIDATION`
 
 6) Delta  
 Input: MatchResults + link proposals  
 Output: Delta Report object (SCH-006)  
+Side effects: Writes one Delta Report under `Reports/Delta/`; appends audit metadata.
 Errors: `ERR_SCHEMA_VALIDATION`
 
 7) Propose + Queue  
 Input: ExtractionBundle + MatchResults + vault snapshot  
 Output: Review Queue Items (SCH-007)  
+Side effects: Writes queue items under `Inbox/ReviewQueue/`.
 Errors: `ERR_SCHEMA_VALIDATION`
 
 ### 6.2 Minimum extraction outputs
@@ -531,7 +648,7 @@ Errors: `ERR_SCHEMA_VALIDATION`
 **Requirement PIPE-002:** The system MUST stage ingestion outputs in draft scope and MUST NOT leave partially written canonical files on failure.
 
 **Acceptance Criteria**
-- AC-PIPE-002-1: Inducing a failure after extraction but before queue writing results in either (a) no new files, or (b) all new files placed under `Quarantine/` with diagnostics.
+- AC-PIPE-002-1: Inducing a failure after extraction but before queue writing permits durable outputs (`Reports/Delta/`, `Logs/Audit/`) but requires all partial draft artifacts to be quarantined with diagnostics.
 - AC-PIPE-002-2: No files in canonical directories are created or modified in any failure scenario without Promotion.
 
 ### 6.4 Idempotency resolution
@@ -570,10 +687,24 @@ Errors: `ERR_SCHEMA_VALIDATION`
 - `CONTRADICTING`: preserve both claims and emit an explicit conflict record in the Delta Report.
 - `NEW`: create a Draft Claim Note linked to its Source.
 
+Similarity thresholds (decision record):
+- `EXACT`: similarity `>= 0.97`
+- `NEAR_DUPLICATE`: similarity `>= 0.85` and `< 0.97`
+- `NEW` candidate default: max similarity `< 0.70`
+- Similarity in `[0.70..0.85)` requires reviewer decision between `merge` and `create` paths.
+
+Canonical update policy from match class:
+- `EXACT`: update existing canonical claim provenance/support only (no new claim file).
+- `NEAR_DUPLICATE`: default to update existing claim; creating a new claim file requires explicit review approval.
+- `SUPPORTING`: update existing claim support/provenance fields; no new claim file by default.
+- `CONTRADICTING`: create a new draft claim and a conflict link proposal; never overwrite existing canonical claim text.
+- `NEW`: create new draft claim and queue for promotion.
+
 **Acceptance Criteria**
 - AC-DED-003-1: Re-ingesting an overlap-only fixture yields `match_groups.NEW.length==0` and does not increase canonical claim note count.
 - AC-DED-003-2: A contradiction fixture yields `match_groups.CONTRADICTING.length>=1` and includes both involved claim identifiers in the Delta Report conflict records.
 - AC-DED-003-3: A novel fixture yields `match_groups.NEW.length>=1` and creates Draft Claim Notes for those new claims.
+- AC-DED-003-4: For claims with similarity in `[0.70..0.85)`, generated queue items include a reviewer-visible merge/create recommendation and do not auto-promote.
 
 ### 7.4 Novelty scoring
 **Requirement DEL-002:** The system MUST compute `novelty_score` deterministically using only Delta Report counts and MUST define it as:
@@ -583,6 +714,18 @@ Errors: `ERR_SCHEMA_VALIDATION`
 - AC-DEL-002-1: For any Delta Report, recomputing the formula from `counts` matches stored `novelty_score` exactly (within floating-point tolerance of 1e-9).
 - AC-DEL-002-2: `novelty_score` equals `0` when `total_extracted_claims==0`.
 
+### 7.5 Confidence rubric (MVP1 advisory)
+**Requirement CONF-001:** MVP1 MUST apply a deterministic advisory confidence rubric for extracted claims.
+
+Rubric (advisory; does not auto-promote):
+- `confidence = clamp(0,1, 0.40*provenance_quality + 0.30*extract_consistency + 0.20*dedupe_support + 0.10*source_reliability)`
+- all factor values are deterministic and in `[0..1]`
+- confidence guides review ordering and frontier factors but is not itself a promotion decision
+
+**Acceptance Criteria**
+- AC-CONF-001-1: Re-running confidence calculation for the same fixture yields identical values.
+- AC-CONF-001-2: Claims missing required provenance fields cannot exceed `confidence=0.4` and are routed to human review.
+
 ## 8. Review Queue and Promotion
 ### 8.1 Review queue generation
 **Requirement REV-001:** Ingestion MUST generate Review Queue Items for all proposed canonical-impacting actions, including at minimum: promoting new claims and creating new source notes.
@@ -591,16 +734,62 @@ Errors: `ERR_SCHEMA_VALIDATION`
 - AC-REV-001-1: For a fixture producing at least one new claim, ingestion produces at least one queue item with `item_type: claim_note` and `proposed_action: promote_to_canon` (or `create` + later promotion path).
 - AC-REV-001-2: Queue items include `checks` that at least capture `provenance_present` for claim-related items.
 
-### 8.2 Promotion semantics
-**Requirement REV-002:** Promotion MUST:
+### 8.1.1 Nightly reading-first review workflow
+**Requirement REV-001A:** Review MUST support a reading-first nightly workflow that groups queue items by source into Review Packets.
+
+Workflow requirements:
+- Default review unit is source packet, with optional claim-level drill-down.
+- Packet actions are exactly: `approve_all`, `approve_selected`, `hold`, `reject`.
+- `hold` keeps queue items in `pending_review` and records `hold_until` metadata in digest decision records.
+- Contradicting proposals are always human-review only; they are never auto-approved.
+- Apply operations generated from digest decisions produce one git commit per source packet when git mode is enabled.
+
+**Acceptance Criteria**
+- AC-REV-001A-1: A generated digest includes packet summaries, claim cards, citations, and canonical-impact descriptions for each source.
+- AC-REV-001A-2: Applying packet actions through `review` and `graduate --from_digest` yields deterministic queue and promotion outcomes.
+- AC-REV-001A-3: Hold decisions resurface after the configured hold TTL (decision: 14 days).
+
+### 8.1.2 Auto-approval lane policy
+**Requirement REV-001B:** The Auto-Approval Lane MUST be constrained to low-risk, non-semantic updates.
+
+Allowed auto-approval classes:
+- `EXACT` matches that only attach provenance/support metadata.
+- metadata-only Source/Claim note field updates that do not alter claim meaning.
+- non-semantic formatting normalization (whitespace/frontmatter ordering/link formatting) with no claim-text change.
+
+Disallowed auto-approval classes:
+- any `NEW` claim proposal.
+- any `CONTRADICTING` proposal.
+- any proposal with missing/weak provenance checks.
+- any merge/create ambiguity in similarity band `[0.70..0.85)`.
+
+**Acceptance Criteria**
+- AC-REV-001B-1: Auto-approved items always include policy reason codes in audit details.
+- AC-REV-001B-2: Disallowed classes are routed to human-review packets and remain `pending_review` until explicit review action.
+
+### 8.2 Review state transitions
+**Requirement REV-002:** Queue state transitions MUST be explicit and mediated by `review` command semantics.
+
+Transition rules:
+- legal transitions: `pending_review -> approved` and `pending_review -> rejected`
+- illegal transitions: any mutation of `approved`/`rejected` status without explicit migration tooling
+- `hold` is a review decision artifact, not a queue status mutation
+
+**Acceptance Criteria**
+- AC-REV-002-1: Integration tests enforce that illegal transitions return `ERR_QUEUE_IMMUTABLE`.
+- AC-REV-002-2: `review` writes decision records and actor/reason metadata for every transition.
+
+### 8.3 Promotion semantics
+**Requirement REV-003:** Promotion MUST:
 1) Validate schemas (SCH-001..SCH-007) in strict mode for promoted items.  
 2) Update promoted Notes to `status: canon`.  
 3) Write promoted Notes into canonical directories.  
 4) Append audit entries for all affected files (see §9.1).
 
 **Acceptance Criteria**
-- AC-REV-002-1: After a successful Promotion, every promoted Note validates and has `status: canon`.
-- AC-REV-002-2: Audit log contains an entry that lists the promoted paths and the actor identifier.
+- AC-REV-003-1: After a successful Promotion, every promoted Note validates and has `status: canon`.
+- AC-REV-003-2: Audit log contains an entry that lists the promoted paths and the actor identifier.
+- AC-REV-003-3: `graduate` mutating mode enforces strict validation; `strict=false` is accepted only when `dry_run=true`.
 
 ## 9. Security, Privacy, and Audit
 ### 9.1 Audit logging
@@ -632,7 +821,38 @@ Audit event minimum fields:
 - AC-SEC-002-1: Egress audit events include either (a) the full outbound payload content stored locally, or (b) a payload digest plus the list of source file paths included.
 - AC-SEC-002-2: Egress audit events include a reason field (e.g., command name and user request context).
 
-**TODO-Q-SEC-1:** Define the default allowlist and blocklist patterns (beyond the directory-level boundaries in §4.1) and the sanitization/redaction policy.
+Default policy decision (Q5): start in report-only mode for 14 days, then enforce strict default-deny.
+
+Default allowlist patterns (post-burn-in):
+- `Sources/**`
+- `Claims/**`
+- `Concepts/**`
+- `Questions/**`
+- `Projects/**`
+- `MOCs/**`
+- `Inbox/ReviewDigest/**`
+- `Reports/Delta/**`
+
+Default blocklist patterns:
+- `Logs/Audit/**`
+- `Indexes/**`
+- `Quarantine/**`
+- `**/.git/**`
+- `**/*.key`
+- `**/*.pem`
+- `**/*secret*`
+
+Default sanitization policy:
+- fail closed on redact/parse failures
+- redact API keys/tokens, email addresses, phone numbers, and local absolute paths unless explicitly required by command
+- include `redaction_summary` in audit `details`
+
+**Requirement SEC-003:** Egress mode transitions MUST be explicit (`report_only` -> `enforce`) and auditable.
+
+**Acceptance Criteria**
+- AC-SEC-003-1: In `report_only`, blocked content is logged as `egress_blocked` simulation events but send path remains allowed.
+- AC-SEC-003-2: In `enforce`, blocklisted payloads are rejected with `ERR_EGRESS_POLICY_BLOCK` and no outbound bytes are sent.
+- AC-SEC-003-3: Mode transitions append an audit event including actor, timestamp, and reason.
 
 ## 10. Failure Modes and Recovery
 ### 10.1 Explicit failures and recoverability
@@ -673,23 +893,44 @@ Milestones define required capability bundles.
 - Generate Source Note, Extraction Bundle, and Delta Report.
 - Perform basic dedupe/match classification.
 - Propose best-effort links (as Review Queue Items).
+- Generate nightly Review Digest packets grouped by source.
+- Support packet actions: `approve_all`, `approve_selected`, `hold`, `reject`.
+- Support deterministic apply from digest decisions (`graduate --from_digest`).
+- Enforce constrained Auto-Approval Lane policy for non-semantic updates only.
 - Enforce provenance and Promotion gate.
 
 **Acceptance Criteria**
 - AC-MVP1-001-1: End-to-end tests cover URL and PDF ingest and verify artifacts and schemas.
 - AC-MVP1-001-2: Idempotency test demonstrates source_id reuse and no canonical duplication on repeat ingest.
+- AC-MVP1-001-3: Nightly digest test verifies packet generation and deterministic decision apply behavior.
+- AC-MVP1-001-4: Auto-lane test verifies disallowed classes (`NEW`, `CONTRADICTING`) remain in human review.
 
 ### 12.2 MVP2
 **Requirement MVP2-001:** MVP2 MUST include:
 - Review Queue lifecycle enforcement and `graduate`.
 - Promotion updates canonical directories with audit records.
-- Frontier output for seeded contradictions and questions.
+- Frontier output for seeded contradictions and questions using deterministic scoring formula.
+- Stable context/frontier retrieval behavior over canonical wikilink graph.
 
 **Acceptance Criteria**
 - AC-MVP2-001-1: Integration test enforces invalid queue transitions fail with `ERR_QUEUE_IMMUTABLE`.
 - AC-MVP2-001-2: Frontier seeded fixture yields non-empty `conflicts` and `open_questions`.
+- AC-MVP2-001-3: Frontier fixture yields deterministic scores and ordering across repeated runs.
 
-### 12.3 MVP3 (future)
+### 12.3 Performance targets (decision Q6)
+**Requirement PERF-001:** MVP1/MVP2 MUST enforce numeric p95 latency targets on benchmark fixtures.
+
+Targets:
+- `ingest(url_basic)` p95 <= 60s
+- `ingest(pdf_basic)` p95 <= 120s
+- `delta` by `delta_report_path` p95 <= 5s
+- `frontier` on seeded medium fixture p95 <= 8s
+
+**Acceptance Criteria**
+- AC-PERF-001-1: Bench suite reports p95 for all four targets and fails gate on threshold breach.
+- AC-PERF-001-2: Benchmark results include fixture id, run count, and hardware profile metadata.
+
+### 12.4 MVP3 (future)
 MVP3 may include advanced triage (“watery vs dense”), `/connect`, `/trace`, `/ideas`, and ranking improvements.
 
 **TODO-Q-MVP3-1:** Define the triage scoring model and bucket thresholds for watery vs dense and skip-list behavior.  
@@ -712,6 +953,8 @@ This section specifies required testing layers and fixture strategy.
 **Acceptance Criteria**
 - AC-TST-I-001-1: A full pipeline run from capture→delta→queue completes for each supported source kind fixture.
 - AC-TST-I-001-2: A boundary test verifies no writes occur under canonical directories without Promotion (AC-INV-002-1).
+- AC-TST-I-001-3: `review` transition tests enforce legal transitions and immutable-state failures.
+- AC-TST-I-001-4: `review_digest` tests verify source packet grouping and packet decision schema.
 
 ### 13.3 End-to-End Tests
 **Requirement TST-E2E-001:** End-to-end tests MUST validate user workflows: first ingest, repeat ingest, contradiction ingest, promotion, and context/frontier outputs.
@@ -721,6 +964,8 @@ This section specifies required testing layers and fixture strategy.
 - AC-TST-E2E-001-2: Repeat ingest fixture produces identical `source_id` and zero new canonical claim notes.
 - AC-TST-E2E-001-3: Contradiction fixture yields `CONTRADICTING` matches and `frontier.conflicts.length>=1` in seeded data.
 - AC-TST-E2E-001-4: Promotion fixture updates statuses to `canon`, moves files into canonical directories, and appends audit events.
+- AC-TST-E2E-001-5: Nightly digest workflow fixture validates `approve_all`, `approve_selected`, `hold`, and `reject` semantics end-to-end.
+- AC-TST-E2E-001-6: Hold TTL fixture resurfaces held items after 14 days.
 
 ### 13.4 Golden Fixtures
 Golden fixtures are versioned, deterministic test inputs with expected outputs.
@@ -759,6 +1004,13 @@ Minimum regression cases:
 - AC-TST-R-001-1: Any regression failure fails CI/release gating for the vault subsystem.
 - AC-TST-R-001-2: Regression cases remain stable across refactors (only updated when intended behavior changes, with changelog note).
 
+### 13.6 Performance Bench Tests
+**Requirement TST-P-001:** Bench tests MUST enforce PERF-001 thresholds and produce reproducible p95 reports.
+
+**Acceptance Criteria**
+- AC-TST-P-001-1: Bench suite runs in CI (or scheduled local gate) and records p50/p95/p99 plus pass/fail per target.
+- AC-TST-P-001-2: Any p95 threshold breach blocks release unless explicitly waived with a changelog rationale.
+
 ## 14. Spec Lint Checklist
 **Requirement LINT-001:** Specialized terms used in the spec MUST appear in the Glossary.
 
@@ -780,10 +1032,18 @@ Minimum regression cases:
 **Acceptance Criteria**
 - AC-LINT-004-1: A spec-lint pass flags duplicate normative statements that restate the same invariant without referencing its ID.
 
-## 15. TODO Questions
-- TODO-Q1: Choose canonical ID strategy for Notes: slug-only, hash-only, or slug+hash hybrid (impacts NAM-001 and dedupe collision handling).
-- TODO-Q2: Define minimum provenance locator granularity per source kind (e.g., URL paragraph index vs PDF page/section).
-- TODO-Q3: Define confidence calibration rubric per domain (how `confidence` is assigned and validated).
-- TODO-Q4: Define the authoritative review UX for Promotion decisions (CLI-only vs Obsidian plugin vs both) and how approvals are recorded.
-- TODO-Q5: Define default egress allowlist/blocklist patterns and sanitization policies (TODO-Q-SEC-1).
-- TODO-Q6: Define performance targets for ingestion and retrieval (numeric thresholds) and how they are measured in tests/benchmarks.
+## 15. Decision Record (Resolved for v1.1)
+- Q1 (Note ID strategy): Use hybrid `<slug>--h-<12hex>` for machine-generated notes; migration compatibility may allow manual slug-only notes.
+- Q2 (provenance locator granularity): URL/PDF require structured locator + `snippet_hash`; other source kinds use `raw_locator` in MVP1.
+- Q3 (confidence rubric): deterministic advisory rubric enabled in MVP1 (see CONF-001), with stricter domain calibration deferred.
+- Q4 (authoritative review UX): command/API is authoritative; CLI and Obsidian plugin are client surfaces.
+- Q5 (egress policy): staged `report_only (14 days) -> enforce default-deny allowlist` with fail-closed redaction.
+- Q6 (performance targets): fixed numeric p95 thresholds defined in PERF-001.
+- Q7 (nightly review unit): source-level Review Packets with optional claim drill-down.
+- Q8 (review actions): `approve_all`, `approve_selected`, `hold`, `reject`.
+- Q9 (auto-approval lane): constrained to low-risk, non-semantic updates; semantic changes remain human-review.
+- Q10 (apply commit granularity): one commit per source packet apply batch.
+- Q11 (hold aging policy): hold TTL is 14 days, then item resurfaces in nightly digest.
+- Q12 (contradictions): always require human review with side-by-side evidence; never auto-approved.
+- Q13 (frontier scoring): deterministic weighted score formula in CMD-FRN-002.
+- Q14 (create-vs-update threshold): similarity thresholds and merge/create ambiguity band defined in DED-003.
