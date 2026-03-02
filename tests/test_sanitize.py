@@ -28,7 +28,7 @@ class TestRedactionCategories:
         """Fixture payload with API key token and email address."""
         payload = (
             "User: john.doe@example.com\n"
-            "API Key: sk_test_FAKE00KEY11FOR22TESTING33\n"
+            "API Key: sk_test_xxxxxxxxxxxxxxxxxxxx\n"
             "Notes: Some regular text here.\n"
         )
         result = sanitize_payload(payload)
