@@ -74,7 +74,10 @@ def load_progress(mission_path: Path) -> dict[str, Any]:
         raise FileNotFoundError(f"progress.yaml not found at: {progress_file}")
     
     with open(progress_file) as f:
-        return yaml.safe_load(f)
+        data = yaml.safe_load(f)
+    if data is None:
+        return {}
+    return data
 
 
 def save_progress(mission_path: Path, progress: dict[str, Any]) -> None:
@@ -452,10 +455,17 @@ def run_agent(
                 "content": tool_result if isinstance(tool_result, str) else json.dumps(tool_result),
             })
         
-        # If we've hit the limit, break with warning
+        # If we've hit the limit, break with warning (success=False for safety)
         if iteration == max_tool_iterations - 1:
             logger.warning(f"Hit max tool iterations ({max_tool_iterations}), stopping")
             final_content = response.content or "Max tool iterations reached"
+            final_response = CompletionResponse(
+                content=final_content,
+                usage=total_usage,
+                success=False,
+                error=f"Hit max tool iterations ({max_tool_iterations})",
+            )
+            return final_response
     
     # Create final response with accumulated usage
     final_response = CompletionResponse(
