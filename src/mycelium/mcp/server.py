@@ -13,8 +13,10 @@ Implements 7 tools for MCP-compatible clients:
 
 from __future__ import annotations
 
+import fcntl
 import os
 import re
+import shlex
 import subprocess
 from pathlib import Path
 from typing import Any
@@ -28,40 +30,99 @@ mcp = FastMCP("Mycelium MCP Server")
 # Environment variable to control auto-approval (for testing/automation)
 HITL_AUTO_APPROVE = os.environ.get("MYCELIUM_HITL_AUTO_APPROVE", "").lower() in ("1", "true", "yes")
 
+# Allowed command executables. Only these base names may be invoked via run_command.
+# This prevents arbitrary binary execution through the MCP interface.
+COMMAND_ALLOWLIST = frozenset({
+    "br", "bd",                                          # beads CLI
+    "cat", "head", "tail", "wc", "grep", "find", "ls",  # filesystem inspection
+    "echo", "printf", "date", "pwd",                     # basic utilities
+    "git",                                               # version control
+    # python/pip intentionally excluded — allows arbitrary code execution
+    "pytest",                                            # test runner
+    "mkdir", "cp", "mv", "touch",                        # safe filesystem ops
+})
 
-def _get_current_agent(mission_path: str) -> str:
-    """Get current_agent from progress.yaml."""
+# Sandbox root: all file I/O tools are confined to this directory.
+# Set MYCELIUM_MCP_SANDBOX_ROOT to override. Defaults to cwd.
+SANDBOX_ROOT = Path(os.environ.get("MYCELIUM_MCP_SANDBOX_ROOT", ".")).resolve()
+
+
+class PathNotAllowedError(ValueError):
+    """Raised when a path escapes the MCP sandbox root."""
+
+
+def _safe_resolve(user_path: str) -> Path:
+    """Resolve a user-provided path and verify it's within the sandbox.
+
+    Args:
+        user_path: Path string from the MCP client.
+
+    Returns:
+        Resolved absolute Path.
+
+    Raises:
+        PathNotAllowedError: If the resolved path escapes SANDBOX_ROOT.
+    """
+    resolved = Path(user_path).resolve()
+    sandbox = SANDBOX_ROOT
+    if resolved == sandbox or str(resolved).startswith(str(sandbox) + os.sep):
+        return resolved
+    raise PathNotAllowedError(
+        f"Path '{user_path}' resolves outside the sandbox root ({sandbox})"
+    )
+
+
+def _get_current_agent(mission_path: str) -> str | None:
+    """Get current_agent from progress.yaml.
+
+    Returns:
+        Normalized (lowercased, stripped) agent name, or None if the
+        agent cannot be determined (missing file, parse error, etc.).
+    """
     progress_file = Path(mission_path)
     if progress_file.is_dir():
         progress_file = progress_file / "progress.yaml"
-    
+
     if not progress_file.exists():
-        return ""
-    
+        return None
+
     try:
         with open(progress_file) as f:
             progress = yaml.safe_load(f) or {}
-        return progress.get("current_agent", "").strip()
+        raw = progress.get("current_agent", "")
+        if not isinstance(raw, str) or not raw.strip():
+            return None
+        return raw.strip().lower()
     except Exception:
-        return ""
+        return None
 
 
-def _requires_approval(mission_path: str | None = None, auto_approve: bool = False) -> tuple[bool, str]:
+# Agents that are explicitly allowed to bypass HITL approval.
+_HITL_BYPASS_AGENTS = frozenset({"scientist", "verifier", "maintainer"})
+
+
+def _requires_approval(mission_path: str | None = None) -> tuple[bool, str]:
     """
     Check if HITL approval is required.
-    
+
+    Fail-closed: approval is required by default. Only agents in
+    _HITL_BYPASS_AGENTS or the HITL_AUTO_APPROVE env var can bypass.
+
     Returns:
         Tuple of (requires_approval, reason)
     """
-    if auto_approve or HITL_AUTO_APPROVE:
-        return False, "auto_approve enabled"
-    
-    if mission_path:
-        current_agent = _get_current_agent(mission_path)
-        if current_agent == "implementer":
-            return True, "current_agent is implementer"
-    
-    return False, ""
+    if HITL_AUTO_APPROVE:
+        return False, "HITL_AUTO_APPROVE enabled via environment"
+
+    if not mission_path:
+        return True, "no mission_path provided (fail-closed)"
+
+    current_agent = _get_current_agent(mission_path)
+    if current_agent is None:
+        return True, "current_agent could not be determined (fail-closed)"
+    if current_agent in _HITL_BYPASS_AGENTS:
+        return False, f"current_agent '{current_agent}' is allowed"
+    return True, f"current_agent '{current_agent}' requires approval"
 
 
 # =============================================================================
@@ -71,19 +132,22 @@ def _requires_approval(mission_path: str | None = None, auto_approve: bool = Fal
 def _read_progress(mission_path: str) -> dict[str, Any]:
     """
     Read and parse a mission's progress.yaml file.
-    
+
     Args:
         mission_path: Path to mission directory or progress.yaml file.
-        
+
     Returns:
         Parsed progress.yaml content as a dictionary.
-        
+
     Raises:
         FileNotFoundError: If progress.yaml doesn't exist.
         ValueError: If YAML parsing fails.
+        PathNotAllowedError: If path is outside the sandbox.
     """
-    path = Path(mission_path)
-    
+    # Validate mission_path is within the sandbox
+    safe_path = _safe_resolve(mission_path)
+    path = safe_path
+
     if path.is_dir():
         progress_file = path / "progress.yaml"
     elif path.suffix == ".yaml":
@@ -99,6 +163,8 @@ def _read_progress(mission_path: str) -> dict[str, Any]:
             content = yaml.safe_load(f)
             if content is None:
                 return {}
+            if not isinstance(content, dict):
+                raise ValueError(f"Expected YAML dict, got {type(content).__name__}")
             return content
     except yaml.YAMLError as e:
         raise ValueError(f"Failed to parse YAML: {e}")
@@ -107,21 +173,24 @@ def _read_progress(mission_path: str) -> dict[str, Any]:
 def _update_progress(mission_path: str, section: str, data: dict[str, Any]) -> dict[str, Any]:
     """
     Update a specific section of a mission's progress.yaml file.
-    
+
     Args:
         mission_path: Path to mission directory or progress.yaml file.
         section: Name of the section to update (e.g., 'scientist_plan', 'implementer_log').
         data: Dictionary containing the data to merge into the section.
-        
+
     Returns:
         Updated progress.yaml content.
-        
+
     Raises:
         FileNotFoundError: If progress.yaml doesn't exist.
         ValueError: If section is invalid or YAML operations fail.
+        PathNotAllowedError: If path is outside the sandbox.
     """
-    path = Path(mission_path)
-    
+    # Validate mission_path is within the sandbox
+    safe_path = _safe_resolve(mission_path)
+    path = safe_path
+
     if path.is_dir():
         progress_file = path / "progress.yaml"
     elif path.suffix == ".yaml":
@@ -148,78 +217,89 @@ def _update_progress(mission_path: str, section: str, data: dict[str, Any]) -> d
     if section not in valid_sections:
         raise ValueError(f"Invalid section: '{section}'. Valid sections: {valid_sections}")
     
+    # Use advisory file locking to prevent TOCTOU races from concurrent
+    # update_progress calls in a multi-agent system.
+    lock_path = progress_file.with_suffix(".yaml.lock")
+    lock_fd = open(lock_path, "w")
     try:
-        with open(progress_file) as f:
-            progress = yaml.safe_load(f) or {}
-    except yaml.YAMLError as e:
-        raise ValueError(f"Failed to parse existing YAML: {e}")
-    
-    # Update the section
-    if section == "current_agent":
-        # Special case: current_agent is a string, not a dict
-        # Validation: Enforce string and handle LLM mistakes (nested dicts)
-        val = data.get("value", data) if isinstance(data, dict) else data
-        
-        if isinstance(val, dict):
-            # If still a dict, try to unwrap 'current_agent' key if it exists
-            # This handles: current_agent: { current_agent: "implementer" }
-            if "current_agent" in val:
-                val = val["current_agent"]
-            elif "value" in val:
-                val = val["value"]
-            # If strictly a dict with other keys, convert to str to allow human fixing, but warn
+        fcntl.flock(lock_fd, fcntl.LOCK_EX)
+
+        try:
+            with open(progress_file) as f:
+                progress = yaml.safe_load(f) or {}
+        except yaml.YAMLError as e:
+            raise ValueError(f"Failed to parse existing YAML: {e}")
+
+        # Update the section
+        if section == "current_agent":
+            # Special case: current_agent is a string, not a dict
+            # Validation: Enforce string and handle LLM mistakes (nested dicts)
+            val = data.get("value", data) if isinstance(data, dict) else data
+
             if isinstance(val, dict):
-                val = str(val)
-                
-        progress["current_agent"] = str(val).strip()
-        
-    elif isinstance(progress.get(section), list) and isinstance(data, dict) and "append" in data:
-        # Append to list sections (like implementer_log, verifier_report)
-        progress[section].append(data["append"])
-        
-    elif isinstance(progress.get(section), dict):
-        # Merge dict sections
-        # Validation: Prevent recursive wrapping (e.g. scientist_plan: { scientist_plan: ... })
-        if isinstance(data, dict) and section in data and isinstance(data[section], dict):
-            # The LLM wrapped the update in the section key name. Unwrap it.
-            data = data[section]
-            
-        progress[section].update(data)
-        
-    else:
-        # Replace section
-        progress[section] = data
-    
-    # Write back
-    try:
-        with open(progress_file, "w") as f:
-            yaml.dump(progress, f, default_flow_style=False, allow_unicode=True, sort_keys=False)
-    except Exception as e:
-        raise ValueError(f"Failed to write YAML: {e}")
-    
-    return progress
+                # If still a dict, try to unwrap 'current_agent' key if it exists
+                # This handles: current_agent: { current_agent: "implementer" }
+                if "current_agent" in val:
+                    val = val["current_agent"]
+                elif "value" in val:
+                    val = val["value"]
+                # If strictly a dict with other keys, convert to str to allow human fixing, but warn
+                if isinstance(val, dict):
+                    val = str(val)
+
+            progress["current_agent"] = str(val).strip()
+
+        elif isinstance(progress.get(section), list) and isinstance(data, dict) and "append" in data:
+            # Append to list sections (like implementer_log, verifier_report)
+            progress[section].append(data["append"])
+
+        elif isinstance(progress.get(section), dict):
+            # Merge dict sections
+            # Validation: Prevent recursive wrapping (e.g. scientist_plan: { scientist_plan: ... })
+            if isinstance(data, dict) and section in data and isinstance(data[section], dict):
+                # The LLM wrapped the update in the section key name. Unwrap it.
+                data = data[section]
+
+            progress[section].update(data)
+
+        else:
+            # Replace section
+            progress[section] = data
+
+        # Write back
+        try:
+            with open(progress_file, "w") as f:
+                yaml.safe_dump(progress, f, default_flow_style=False, allow_unicode=True, sort_keys=False)
+        except Exception as e:
+            raise ValueError(f"Failed to write YAML: {e}")
+
+        return progress
+    finally:
+        fcntl.flock(lock_fd, fcntl.LOCK_UN)
+        lock_fd.close()
 
 
 def _list_files(directory: str, include_hidden: bool = False) -> list[dict[str, Any]]:
     """
     List contents of a directory.
-    
+
     Args:
         directory: Path to directory to list.
         include_hidden: Whether to include hidden files (starting with .).
-        
+
     Returns:
         List of file/directory info dicts with 'name', 'type', 'size' keys.
-        
+
     Raises:
         FileNotFoundError: If directory doesn't exist.
         NotADirectoryError: If path is not a directory.
+        PathNotAllowedError: If path escapes the sandbox.
     """
-    path = Path(directory)
-    
+    path = _safe_resolve(directory)
+
     if not path.exists():
         raise FileNotFoundError(f"Directory not found: {directory}")
-    
+
     if not path.is_dir():
         raise NotADirectoryError(f"Not a directory: {directory}")
     
@@ -254,23 +334,24 @@ def _list_files(directory: str, include_hidden: bool = False) -> list[dict[str, 
 def _read_file(file_path: str, encoding: str = "utf-8") -> str:
     """
     Read contents of a file.
-    
+
     Args:
         file_path: Path to file to read.
         encoding: Character encoding to use (default: utf-8).
-        
+
     Returns:
         File contents as string.
-        
+
     Raises:
         FileNotFoundError: If file doesn't exist.
         ValueError: If encoding fails.
+        PathNotAllowedError: If path escapes the sandbox.
     """
-    path = Path(file_path)
-    
+    path = _safe_resolve(file_path)
+
     if not path.exists():
         raise FileNotFoundError(f"File not found: {file_path}")
-    
+
     if path.is_dir():
         raise IsADirectoryError(f"Path is a directory, not a file: {file_path}")
     
@@ -286,45 +367,46 @@ def _write_file(
     file_path: str,
     content: str,
     mission_path: str = "",
-    auto_approve: bool = False,
     create_dirs: bool = True,
 ) -> dict[str, Any]:
     """
     Write content to a file. Requires HITL approval when current_agent is implementer.
-    
+
     Args:
         file_path: Path to file to write.
         content: Content to write to the file.
         mission_path: Optional path to mission for HITL check.
-        auto_approve: If True, bypass HITL approval.
         create_dirs: If True, create parent directories if they don't exist.
-        
+
     Returns:
         Dict with 'success', 'path', 'bytes_written', and optional 'approval_required'.
-        
+
     Raises:
         PermissionError: If HITL approval is required but not granted.
     """
-    requires, reason = _requires_approval(mission_path, auto_approve)
-    
+    requires, reason = _requires_approval(mission_path)
+
     if requires:
         return {
             "success": False,
             "approval_required": True,
             "reason": reason,
-            "message": f"HITL approval required to write file: {file_path}. Set auto_approve=True or MYCELIUM_HITL_AUTO_APPROVE=1 to bypass.",
+            "message": f"HITL approval required to write file: {file_path}. Set MYCELIUM_HITL_AUTO_APPROVE=1 to bypass.",
         }
     
-    path = Path(file_path)
-    
+    try:
+        path = _safe_resolve(file_path)
+    except PathNotAllowedError as e:
+        return {"success": False, "error": str(e)}
+
     if create_dirs and not path.parent.exists():
         path.parent.mkdir(parents=True, exist_ok=True)
-    
+
     try:
         path.write_text(content)
         return {
             "success": True,
-            "path": str(path.absolute()),
+            "path": str(path),
             "bytes_written": len(content.encode("utf-8")),
         }
     except PermissionError as e:
@@ -340,47 +422,82 @@ def _run_command(
     command: str,
     cwd: str = "",
     mission_path: str = "",
-    auto_approve: bool = False,
     timeout: int = 60,
 ) -> dict[str, Any]:
     """
-    Execute a shell command. Requires HITL approval when current_agent is implementer.
-    
+    Execute a command. Requires HITL approval when current_agent is implementer.
+
+    The command string is parsed via shlex.split (no shell interpretation).
+    Only executables in COMMAND_ALLOWLIST may be invoked.
+
     Args:
-        command: Shell command to execute.
+        command: Command string (parsed with shlex, not passed to a shell).
         cwd: Working directory for command (defaults to current directory).
         mission_path: Optional path to mission for HITL check.
-        auto_approve: If True, bypass HITL approval.
         timeout: Command timeout in seconds (default: 60).
-        
+
     Returns:
         Dict with 'stdout', 'stderr', 'exit_code', and optional 'approval_required'.
-        
+
     Raises:
         PermissionError: If HITL approval is required but not granted.
     """
-    requires, reason = _requires_approval(mission_path, auto_approve)
-    
+    requires, reason = _requires_approval(mission_path)
+
     if requires:
         return {
             "success": False,
             "approval_required": True,
             "reason": reason,
-            "message": f"HITL approval required to run command: {command}. Set auto_approve=True or MYCELIUM_HITL_AUTO_APPROVE=1 to bypass.",
+            "message": f"HITL approval required to run command: {command}. Set MYCELIUM_HITL_AUTO_APPROVE=1 to bypass.",
         }
-    
-    working_dir = cwd if cwd else None
-    
+
+    try:
+        argv = shlex.split(command)
+    except ValueError as e:
+        return {
+            "success": False,
+            "error": f"Failed to parse command: {e}",
+            "exit_code": -1,
+        }
+
+    if not argv:
+        return {
+            "success": False,
+            "error": "Empty command",
+            "exit_code": -1,
+        }
+
+    # Allowlist check: only the base name of the executable is compared.
+    executable = Path(argv[0]).name
+    if executable not in COMMAND_ALLOWLIST:
+        return {
+            "success": False,
+            "error": (
+                f"Command '{executable}' is not in the allowed command list. "
+                f"Allowed: {sorted(COMMAND_ALLOWLIST)}"
+            ),
+            "exit_code": -1,
+        }
+
+    if cwd:
+        try:
+            working_dir: str | None = str(_safe_resolve(cwd))
+        except PathNotAllowedError as e:
+            return {"success": False, "error": str(e), "exit_code": -1}
+    else:
+        working_dir = None
+
     try:
         result = subprocess.run(
-            command,
-            shell=True,
+            argv,
+            shell=False,
             cwd=working_dir,
             capture_output=True,
             text=True,
             timeout=timeout,
         )
-        
+
         return {
             "success": result.returncode == 0,
             "stdout": result.stdout,
@@ -391,6 +508,12 @@ def _run_command(
         return {
             "success": False,
             "error": f"Command timed out after {timeout} seconds",
+            "exit_code": -1,
+        }
+    except FileNotFoundError:
+        return {
+            "success": False,
+            "error": f"Command not found: {argv[0]}",
             "exit_code": -1,
         }
     except Exception as e:
@@ -423,11 +546,11 @@ def _search_codebase(
     Returns:
         List of match dicts with 'file', 'line_number', 'content' keys.
     """
-    path = Path(directory)
-    
+    path = _safe_resolve(directory)
+
     if not path.exists():
         raise FileNotFoundError(f"Directory not found: {directory}")
-    
+
     if is_regex:
         flags = re.IGNORECASE if case_insensitive else 0
         try:
@@ -557,23 +680,21 @@ def write_file(
     file_path: str,
     content: str,
     mission_path: str = "",
-    auto_approve: bool = False,
     create_dirs: bool = True,
 ) -> dict[str, Any]:
     """
     Write content to a file. Requires HITL approval when current_agent is implementer.
-    
+
     Args:
         file_path: Path to file to write.
         content: Content to write to the file.
         mission_path: Optional path to mission for HITL check.
-        auto_approve: If True, bypass HITL approval.
         create_dirs: If True, create parent directories if they don't exist.
-        
+
     Returns:
         Dict with 'success', 'path', 'bytes_written', and optional 'approval_required'.
     """
-    return _write_file(file_path, content, mission_path, auto_approve, create_dirs)
+    return _write_file(file_path, content, mission_path, create_dirs)
 
 
 @mcp.tool
@@ -581,23 +702,22 @@ def run_command(
     command: str,
     cwd: str = "",
     mission_path: str = "",
-    auto_approve: bool = False,
     timeout: int = 60,
 ) -> dict[str, Any]:
     """
-    Execute a shell command. Requires HITL approval when current_agent is implementer.
-    
+    Execute a command (no shell interpretation). Requires HITL approval
+    when current_agent is implementer.
+
     Args:
-        command: Shell command to execute.
+        command: Command string (parsed with shlex, not passed to a shell).
         cwd: Working directory for command (defaults to current directory).
         mission_path: Optional path to mission for HITL check.
-        auto_approve: If True, bypass HITL approval.
         timeout: Command timeout in seconds (default: 60).
-        
+
     Returns:
         Dict with 'stdout', 'stderr', 'exit_code', and optional 'approval_required'.
     """
-    return _run_command(command, cwd, mission_path, auto_approve, timeout)
+    return _run_command(command, cwd, mission_path, timeout)
 
 
 @mcp.tool

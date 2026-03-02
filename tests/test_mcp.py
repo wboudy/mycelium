@@ -15,14 +15,20 @@ import pytest
 import yaml
 
 from mycelium.mcp.server import (
+    COMMAND_ALLOWLIST,
+    PathNotAllowedError,
+    _get_current_agent as get_current_agent,
     _list_files as list_files,
     _read_file as read_file,
     _read_progress as read_progress,
+    _requires_approval as requires_approval,
     _run_command as run_command,
+    _safe_resolve,
     _search_codebase as search_codebase,
     _update_progress as update_progress,
     _write_file as write_file,
 )
+import mycelium.mcp.server as _server
 
 
 # =============================================================================
@@ -31,9 +37,14 @@ from mycelium.mcp.server import (
 
 @pytest.fixture
 def temp_dir():
-    """Create a temporary directory for testing."""
+    """Create a temporary directory for testing and set it as sandbox root."""
     with tempfile.TemporaryDirectory() as tmpdir:
-        yield Path(tmpdir)
+        original_sandbox = _server.SANDBOX_ROOT
+        _server.SANDBOX_ROOT = Path(tmpdir).resolve()
+        try:
+            yield Path(tmpdir)
+        finally:
+            _server.SANDBOX_ROOT = original_sandbox
 
 
 @pytest.fixture
@@ -56,7 +67,7 @@ def sample_progress_yaml(temp_dir):
     
     progress_file = temp_dir / "progress.yaml"
     with open(progress_file, "w") as f:
-        yaml.dump(progress, f)
+        yaml.safe_dump(progress, f)
     
     return progress_file
 
@@ -281,72 +292,180 @@ class TestReadFile:
 
 class TestWriteFile:
     """Tests for write_file tool."""
-    
-    def test_write_with_auto_approve(self, temp_dir):
-        """write_file with auto_approve=True writes file."""
+
+    def test_write_blocked_without_mission_path(self, temp_dir):
+        """write_file is blocked when no mission_path is set (fail-closed)."""
         target = temp_dir / "new_file.txt"
-        
-        result = write_file(
-            str(target),
-            "Hello, World!",
-            auto_approve=True,
-        )
-        
+
+        result = write_file(str(target), "Hello, World!")
+
+        assert result["success"] is False
+        assert result["approval_required"] is True
+        assert not target.exists()
+
+    def test_write_allowed_for_scientist(self, temp_dir):
+        """write_file succeeds when current_agent is scientist (bypass agent)."""
+        (temp_dir / "progress.yaml").write_text("current_agent: scientist\n")
+        target = temp_dir / "new_file.txt"
+
+        result = write_file(str(target), "Hello, World!", mission_path=str(temp_dir))
+
         assert result["success"] is True
         assert result["bytes_written"] == 13
         assert target.read_text() == "Hello, World!"
-    
+
     def test_write_requires_approval_when_implementer(self, sample_progress_yaml, temp_dir):
         """write_file requires approval when current_agent=implementer."""
         target = temp_dir / "new_file.txt"
-        
+
         result = write_file(
             str(target),
             "Hello, World!",
             mission_path=str(sample_progress_yaml.parent),
-            auto_approve=False,
         )
-        
+
         assert result["success"] is False
         assert result["approval_required"] is True
         assert "HITL approval required" in result["message"]
         assert not target.exists()
-    
+
     def test_write_creates_parent_directories(self, temp_dir):
         """write_file creates parent directories if needed."""
+        (temp_dir / "progress.yaml").write_text("current_agent: scientist\n")
         target = temp_dir / "nested" / "deep" / "file.txt"
-        
+
         result = write_file(
-            str(target),
-            "Nested content",
-            auto_approve=True,
-            create_dirs=True,
+            str(target), "Nested content",
+            mission_path=str(temp_dir), create_dirs=True,
         )
-        
+
         assert result["success"] is True
         assert target.exists()
         assert target.read_text() == "Nested content"
-    
-    def test_write_with_env_auto_approve(self, temp_dir):
+
+    def test_write_with_env_auto_approve(self, temp_dir, sample_progress_yaml):
         """write_file respects MYCELIUM_HITL_AUTO_APPROVE env var."""
         target = temp_dir / "new_file.txt"
-        
-        with patch.dict(os.environ, {"MYCELIUM_HITL_AUTO_APPROVE": "1"}):
-            # Need to reimport to pick up env change
-            from mycelium.mcp import server
-            
-            original_value = server.HITL_AUTO_APPROVE
-            server.HITL_AUTO_APPROVE = True
-            
-            try:
-                result = write_file(
-                    str(target),
-                    "Auto approved content",
-                )
-                
-                assert result["success"] is True
-            finally:
-                server.HITL_AUTO_APPROVE = original_value
+        from mycelium.mcp import server
+
+        original_value = server.HITL_AUTO_APPROVE
+        server.HITL_AUTO_APPROVE = True
+
+        try:
+            result = write_file(
+                str(target),
+                "Auto approved content",
+                mission_path=str(sample_progress_yaml.parent),
+            )
+
+            assert result["success"] is True
+        finally:
+            server.HITL_AUTO_APPROVE = original_value
+
+
+# =============================================================================
+# Tests: HITL gate (fail-closed + normalization)
+# =============================================================================
+
+class TestHITLGate:
+    """Tests for fail-closed HITL gate and current_agent normalization."""
+
+    def test_fail_closed_missing_progress(self, temp_dir):
+        """HITL gate requires approval when progress.yaml is missing."""
+        requires, reason = requires_approval(str(temp_dir))
+        assert requires is True
+        assert "could not be determined" in reason
+
+    def test_fail_closed_empty_agent(self, temp_dir):
+        """HITL gate requires approval when current_agent is empty."""
+        (temp_dir / "progress.yaml").write_text("current_agent: ''\n")
+        requires, reason = requires_approval(str(temp_dir))
+        assert requires is True
+        assert "could not be determined" in reason
+
+    def test_fail_closed_malformed_yaml(self, temp_dir):
+        """HITL gate requires approval when YAML is malformed."""
+        (temp_dir / "progress.yaml").write_text("current_agent: [broken\n")
+        requires, reason = requires_approval(str(temp_dir))
+        assert requires is True
+        assert "could not be determined" in reason
+
+    def test_normalize_implementer_case(self, temp_dir):
+        """HITL gate blocks 'Implementer' (case-insensitive)."""
+        (temp_dir / "progress.yaml").write_text("current_agent: Implementer\n")
+        requires, reason = requires_approval(str(temp_dir))
+        assert requires is True
+        assert "implementer" in reason
+
+    def test_normalize_implementer_uppercase(self, temp_dir):
+        """HITL gate blocks 'IMPLEMENTER' (case-insensitive)."""
+        (temp_dir / "progress.yaml").write_text("current_agent: IMPLEMENTER\n")
+        requires, reason = requires_approval(str(temp_dir))
+        assert requires is True
+
+    def test_scientist_bypasses_gate(self, temp_dir):
+        """Scientist agent bypasses HITL gate."""
+        (temp_dir / "progress.yaml").write_text("current_agent: scientist\n")
+        requires, _ = requires_approval(str(temp_dir))
+        assert requires is False
+
+    def test_verifier_bypasses_gate(self, temp_dir):
+        """Verifier agent bypasses HITL gate."""
+        (temp_dir / "progress.yaml").write_text("current_agent: verifier\n")
+        requires, _ = requires_approval(str(temp_dir))
+        assert requires is False
+
+    def test_maintainer_bypasses_gate(self, temp_dir):
+        """Maintainer agent bypasses HITL gate."""
+        (temp_dir / "progress.yaml").write_text("current_agent: Maintainer\n")
+        requires, _ = requires_approval(str(temp_dir))
+        assert requires is False
+
+    def test_unknown_agent_requires_approval(self, temp_dir):
+        """Unknown agent role requires approval (fail-closed)."""
+        (temp_dir / "progress.yaml").write_text("current_agent: rogue_agent\n")
+        requires, reason = requires_approval(str(temp_dir))
+        assert requires is True
+        assert "rogue_agent" in reason
+
+    def test_env_auto_approve_overrides(self, temp_dir):
+        """HITL_AUTO_APPROVE env var bypasses gate regardless of agent."""
+        (temp_dir / "progress.yaml").write_text("current_agent: implementer\n")
+        from mycelium.mcp import server
+
+        original = server.HITL_AUTO_APPROVE
+        server.HITL_AUTO_APPROVE = True
+        try:
+            requires, _ = requires_approval(str(temp_dir))
+            assert requires is False
+        finally:
+            server.HITL_AUTO_APPROVE = original
+
+    def test_no_mission_path_requires_approval(self):
+        """No mission_path triggers fail-closed (approval required)."""
+        requires, reason = requires_approval(None)
+        assert requires is True
+        assert "fail-closed" in reason
+
+    def test_empty_mission_path_requires_approval(self):
+        """Empty mission_path triggers fail-closed."""
+        requires, reason = requires_approval("")
+        assert requires is True
+        assert "fail-closed" in reason
+
+    def test_get_current_agent_normalizes(self, temp_dir):
+        """_get_current_agent returns lowercased, stripped value."""
+        (temp_dir / "progress.yaml").write_text("current_agent: '  Scientist  '\n")
+        assert get_current_agent(str(temp_dir)) == "scientist"
+
+    def test_get_current_agent_returns_none_on_missing(self, temp_dir):
+        """_get_current_agent returns None when file is missing."""
+        assert get_current_agent(str(temp_dir / "nonexistent")) is None
+
+    def test_get_current_agent_returns_none_on_non_string(self, temp_dir):
+        """_get_current_agent returns None when current_agent is not a string."""
+        (temp_dir / "progress.yaml").write_text("current_agent:\n  nested: value\n")
+        assert get_current_agent(str(temp_dir)) is None
 
 
 # =============================================================================
@@ -355,66 +474,105 @@ class TestWriteFile:
 
 class TestRunCommand:
     """Tests for run_command tool."""
-    
-    def test_run_with_auto_approve(self, temp_dir):
-        """run_command with auto_approve=True executes and returns output."""
-        result = run_command(
-            "echo 'Hello, World!'",
-            cwd=str(temp_dir),
-            auto_approve=True,
-        )
-        
+
+    @pytest.fixture(autouse=True)
+    def _scientist_mission(self, temp_dir):
+        """Create a scientist mission so HITL gate is bypassed for command tests."""
+        (temp_dir / "progress.yaml").write_text("current_agent: scientist\n")
+        self._mission = str(temp_dir)
+
+    def _run(self, command, **kwargs):
+        """Helper: run command with scientist mission_path."""
+        kwargs.setdefault("mission_path", self._mission)
+        return run_command(command, **kwargs)
+
+    def test_run_blocked_without_mission_path(self, temp_dir):
+        """run_command is blocked when no mission_path is set (fail-closed)."""
+        result = run_command("echo Hello", cwd=str(temp_dir))
+
+        assert result["success"] is False
+        assert result["approval_required"] is True
+
+    def test_run_allowed_for_scientist(self, temp_dir):
+        """run_command executes for bypass agents."""
+        result = self._run("echo Hello, World!", cwd=str(temp_dir))
+
         assert result["success"] is True
         assert "Hello, World!" in result["stdout"]
         assert result["exit_code"] == 0
-    
+
     def test_run_requires_approval_when_implementer(self, sample_progress_yaml, temp_dir):
         """run_command requires approval when current_agent=implementer."""
         result = run_command(
-            "echo 'test'",
+            "echo test",
             cwd=str(temp_dir),
             mission_path=str(sample_progress_yaml.parent),
-            auto_approve=False,
         )
-        
+
         assert result["success"] is False
         assert result["approval_required"] is True
         assert "HITL approval required" in result["message"]
-    
-    def test_run_captures_stdout_stderr(self, temp_dir):
-        """run_command captures stdout, stderr, and exit_code."""
-        result = run_command(
-            "echo 'stdout' && echo 'stderr' >&2",
-            cwd=str(temp_dir),
-            auto_approve=True,
-        )
-        
-        assert "stdout" in result["stdout"]
-        assert "stderr" in result["stderr"]
-        assert result["exit_code"] == 0
-    
+
     def test_run_handles_timeout(self, temp_dir):
         """run_command handles command timeout."""
-        result = run_command(
-            "sleep 10",
+        # Use 'tail -f /dev/null' which blocks indefinitely using an allowed command
+        result = self._run(
+            "tail -f /dev/null",
             cwd=str(temp_dir),
-            auto_approve=True,
             timeout=1,
         )
-        
+
         assert result["success"] is False
         assert "timed out" in result["error"]
-    
+
     def test_run_failing_command(self, temp_dir):
         """run_command captures exit code for failing commands."""
-        result = run_command(
-            "exit 42",
+        # Use 'grep' with a pattern that won't match to get exit code 1
+        result = self._run(
+            "grep __NOMATCH__ /dev/null",
             cwd=str(temp_dir),
-            auto_approve=True,
         )
-        
+
         assert result["success"] is False
-        assert result["exit_code"] == 42
+        assert result["exit_code"] == 1
+
+    def test_run_blocks_disallowed_command(self, temp_dir):
+        """run_command rejects commands not in the allowlist."""
+        result = self._run("rm -rf /", cwd=str(temp_dir))
+
+        assert result["success"] is False
+        assert "not in the allowed command list" in result["error"]
+
+    def test_run_blocks_shell_injection(self, temp_dir):
+        """run_command prevents shell metacharacter injection."""
+        result = self._run("echo safe; rm -rf /", cwd=str(temp_dir))
+
+        # shlex.split treats ";" as a literal arg to echo, not a command separator
+        assert result["success"] is True
+        assert "safe; rm -rf /" in result["stdout"]
+
+    def test_run_blocks_absolute_path_to_disallowed(self, temp_dir):
+        """run_command checks base name, blocking /bin/sh etc."""
+        result = self._run("/bin/sh -c 'echo pwned'", cwd=str(temp_dir))
+
+        assert result["success"] is False
+        assert "not in the allowed command list" in result["error"]
+
+    def test_run_empty_command(self, temp_dir):
+        """run_command rejects empty command string."""
+        result = self._run("", cwd=str(temp_dir))
+
+        assert result["success"] is False
+
+    def test_allowlist_contains_expected_commands(self):
+        """COMMAND_ALLOWLIST includes essential safe commands."""
+        for cmd in ("echo", "git", "pytest", "ls", "grep", "br"):
+            assert cmd in COMMAND_ALLOWLIST
+
+    def test_allowlist_excludes_dangerous_commands(self):
+        """COMMAND_ALLOWLIST excludes shell and destructive commands."""
+        for cmd in ("sh", "bash", "zsh", "rm", "curl", "wget", "nc", "ncat", "python", "python3"):
+            assert cmd not in COMMAND_ALLOWLIST
 
 
 # =============================================================================
@@ -541,3 +699,65 @@ class TestMCPServerIntegration:
         # This should not raise
         import mycelium.mcp.__main__
         assert hasattr(mycelium.mcp.__main__, "mcp")
+
+
+# =============================================================================
+# Tests: Path sandbox (bd-1fn)
+# =============================================================================
+
+class TestPathSandbox:
+    """Verify file I/O tools are confined to the sandbox root."""
+
+    def test_safe_resolve_allows_child(self, temp_dir):
+        """_safe_resolve allows paths within the sandbox."""
+        target = temp_dir / "subdir" / "file.txt"
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text("ok")
+        result = _safe_resolve(str(target))
+        assert result == target.resolve()
+
+    def test_safe_resolve_blocks_traversal(self, temp_dir):
+        """_safe_resolve blocks paths that escape the sandbox."""
+        with pytest.raises(PathNotAllowedError):
+            _safe_resolve(str(temp_dir / ".." / ".." / "etc" / "passwd"))
+
+    def test_safe_resolve_blocks_absolute_outside(self, temp_dir):
+        """_safe_resolve blocks absolute paths outside sandbox."""
+        with pytest.raises(PathNotAllowedError):
+            _safe_resolve("/etc/passwd")
+
+    def test_read_file_sandbox(self, temp_dir):
+        """read_file blocks reads outside sandbox."""
+        with pytest.raises(PathNotAllowedError):
+            read_file("/etc/passwd")
+
+    def test_list_files_sandbox(self, temp_dir):
+        """list_files blocks listing outside sandbox."""
+        with pytest.raises(PathNotAllowedError):
+            list_files("/etc")
+
+    def test_write_file_sandbox(self, temp_dir):
+        """write_file blocks writes outside sandbox."""
+        (temp_dir / "progress.yaml").write_text("current_agent: scientist\n")
+        result = write_file("/tmp/evil.txt", "pwned", mission_path=str(temp_dir))
+        assert result["success"] is False
+        assert "outside the sandbox" in result["error"]
+
+    def test_search_codebase_sandbox(self, temp_dir):
+        """search_codebase blocks search outside sandbox."""
+        with pytest.raises(PathNotAllowedError):
+            search_codebase("password", directory="/etc")
+
+    def test_run_command_cwd_sandbox(self, temp_dir):
+        """run_command blocks cwd outside sandbox."""
+        (temp_dir / "progress.yaml").write_text("current_agent: scientist\n")
+        result = run_command("echo test", cwd="/etc", mission_path=str(temp_dir))
+        assert result["success"] is False
+        assert "outside the sandbox" in result["error"]
+
+    def test_symlink_escape_blocked(self, temp_dir):
+        """Symlinks that resolve outside sandbox are blocked."""
+        link = temp_dir / "sneaky_link"
+        link.symlink_to("/etc")
+        with pytest.raises(PathNotAllowedError):
+            _safe_resolve(str(link / "passwd"))

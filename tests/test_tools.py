@@ -13,6 +13,7 @@ from unittest.mock import patch
 import pytest
 import yaml
 
+import mycelium.mcp.server as _mcp_server
 from mycelium.tools import (
     TOOL_SCHEMAS,
     execute_tool,
@@ -20,6 +21,17 @@ from mycelium.tools import (
     get_tool_by_name,
     get_tool_names,
 )
+
+
+@pytest.fixture(autouse=True)
+def _sandbox_to_tmp(tmp_path):
+    """Set the MCP sandbox root to the test tmp dir so file I/O tools work."""
+    original = _mcp_server.SANDBOX_ROOT
+    _mcp_server.SANDBOX_ROOT = tmp_path.resolve()
+    try:
+        yield
+    finally:
+        _mcp_server.SANDBOX_ROOT = original
 
 
 # =============================================================================
@@ -134,28 +146,31 @@ class TestExecuteTool:
         # Create test files
         (tmp_path / "file1.txt").write_text("content")
         (tmp_path / "file2.py").write_text("code")
-        
-        result = execute_tool("list_files", {"directory": str(tmp_path)})
+
+        with patch.object(_mcp_server, "SANDBOX_ROOT", tmp_path):
+            result = execute_tool("list_files", {"directory": str(tmp_path)})
         names = [f["name"] for f in result]
         assert "file1.txt" in names
         assert "file2.py" in names
-    
+
     def test_read_file(self, tmp_path):
         """execute_tool dispatches read_file correctly."""
         test_file = tmp_path / "test.txt"
         test_file.write_text("hello world")
-        
-        result = execute_tool("read_file", {"file_path": str(test_file)})
+
+        with patch.object(_mcp_server, "SANDBOX_ROOT", tmp_path):
+            result = execute_tool("read_file", {"file_path": str(test_file)})
         assert result == "hello world"
-    
+
     def test_search_codebase(self, tmp_path):
         """execute_tool dispatches search_codebase correctly."""
         (tmp_path / "file.py").write_text("def hello():\n    pass")
-        
-        result = execute_tool("search_codebase", {
-            "pattern": "hello",
-            "directory": str(tmp_path),
-        })
+
+        with patch.object(_mcp_server, "SANDBOX_ROOT", tmp_path):
+            result = execute_tool("search_codebase", {
+                "pattern": "hello",
+                "directory": str(tmp_path),
+            })
         assert len(result) > 0
         assert any("hello" in r["content"] for r in result)
 
