@@ -181,6 +181,13 @@ def compare_claim(
     for existing in existing_claims:
         canonical_existing = canonicalize(existing["text"])
         sim = sim_fn(canonical_new, canonical_existing)
+        # Guard against NaN / non-finite returns from custom similarity fns
+        import math
+        if not isinstance(sim, (int, float)) or math.isnan(sim) or math.isinf(sim):
+            raise ValueError(
+                f"similarity_fn returned {sim!r} for claim pair; "
+                f"expected a finite float in [0, 1]"
+            )
         if sim > best_sim:
             best_sim = sim
             best_id = existing["id"]

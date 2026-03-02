@@ -304,6 +304,13 @@ def apply_packet_action(
     if policy is None:
         policy = ReviewPolicy()
 
+    from mycelium.review_packet import PACKET_ACTIONS
+
+    if action not in PACKET_ACTIONS:
+        raise ValueError(
+            f"Unknown packet action {action!r}; expected one of {sorted(PACKET_ACTIONS)}"
+        )
+
     result = ActionResult()
 
     if action == "approve_all":
