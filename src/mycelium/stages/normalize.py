@@ -57,6 +57,35 @@ class NormalizedSource:
 # Normalization logic
 # ---------------------------------------------------------------------------
 
+_UNRESERVED = frozenset(
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~"
+)
+
+
+def _unquote_unreserved(s: str) -> str:
+    """Decode only unreserved percent-encoded chars per RFC 3986 §2.3.
+
+    Reserved characters (%2F, %26, %3D, etc.) are left encoded so they
+    don't change path/query semantics.
+    """
+    parts = s.split("%")
+    result = [parts[0]]
+    for part in parts[1:]:
+        if len(part) >= 2:
+            try:
+                char = chr(int(part[:2], 16))
+                if char in _UNRESERVED:
+                    result.append(char + part[2:])
+                else:
+                    # Keep the percent-encoding for reserved chars
+                    result.append("%" + part[:2].upper() + part[2:])
+            except ValueError:
+                result.append("%" + part)
+        else:
+            result.append("%" + part)
+    return "".join(result)
+
+
 def _normalize_url_locator(url: str) -> str:
     """Produce a deterministic locator from a URL.
 
@@ -75,11 +104,13 @@ def _normalize_url_locator(url: str) -> str:
     elif netloc.endswith(":443") and scheme == "https":
         netloc = netloc[:-4]
 
+    # Decode only unreserved percent-encoded chars per RFC 3986 §2.3
+    path = _unquote_unreserved(parsed.path)
     # Normalize path: remove trailing slash (unless root)
-    path = parsed.path.rstrip("/") or "/"
+    path = path.rstrip("/") or "/"
 
     # Sort query parameters for determinism
-    query = parsed.query
+    query = _unquote_unreserved(parsed.query) if parsed.query else ""
     if query:
         pairs = sorted(query.split("&"))
         query = "&".join(pairs)
