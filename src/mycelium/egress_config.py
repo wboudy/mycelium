@@ -170,14 +170,15 @@ def save_egress_policy(vault_root: Path, config: EgressPolicyConfig) -> Path:
     path = _config_path(vault_root)
     path.parent.mkdir(parents=True, exist_ok=True)
 
-    with open(path, "w") as f:
-        yaml.dump(
-            config.to_dict(),
-            f,
-            default_flow_style=False,
-            allow_unicode=True,
-            sort_keys=False,
-        )
+    from mycelium.atomic_write import atomic_write_text
+
+    yaml_content = yaml.dump(
+        config.to_dict(),
+        default_flow_style=False,
+        allow_unicode=True,
+        sort_keys=False,
+    )
+    atomic_write_text(path, yaml_content, mkdir=False)
 
     return path
 

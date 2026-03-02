@@ -210,9 +210,18 @@ def graduate(
             continue
 
         # Determine canonical target path
+        from mycelium.vault_layout import PathTraversalError
+
         note_type = frontmatter.get("type", "source")
         note_id = frontmatter.get("id", queue_id)
-        canonical_path = _resolve_canonical_path(note_type, note_id)
+        try:
+            canonical_path = _resolve_canonical_path(note_type, note_id)
+        except PathTraversalError:
+            rejected.append({
+                "queue_id": queue_id,
+                "reason": f"Path traversal detected in note id: {note_id}",
+            })
+            continue
 
         if params.dry_run:
             promoted.append({

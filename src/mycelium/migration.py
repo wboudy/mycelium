@@ -231,7 +231,9 @@ def migrate_vault_notes(
                 content, migrations, direction=direction,
             )
 
-            note_path.write_text(new_content, encoding="utf-8")
+            from mycelium.atomic_write import atomic_write_text
+
+            atomic_write_text(note_path, new_content, mkdir=False)
 
         except Exception as e:
             result["status"] = "error"

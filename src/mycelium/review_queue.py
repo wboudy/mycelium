@@ -238,7 +238,10 @@ def save_queue_item(vault_root: Path, item: dict[str, Any]) -> Path:
 
     from mycelium.atomic_write import atomic_write_text
 
+    from mycelium.vault_layout import sanitize_path_component
+
     queue_id = item["queue_id"]
+    sanitize_path_component(queue_id)
     file_path = queue_dir / f"{queue_id}.yaml"
 
     yaml_content = yaml.dump(item, default_flow_style=False, allow_unicode=True, sort_keys=False)

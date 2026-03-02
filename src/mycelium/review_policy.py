@@ -197,11 +197,12 @@ def save_review_policy(vault_root: Path, policy: ReviewPolicy) -> None:
     config_path = vault_root / CONFIG_RELATIVE_PATH
     config_path.parent.mkdir(parents=True, exist_ok=True)
 
-    with open(config_path, "w", encoding="utf-8") as f:
-        yaml.dump(
-            policy.to_dict(),
-            f,
-            default_flow_style=False,
-            allow_unicode=True,
-            sort_keys=False,
-        )
+    from mycelium.atomic_write import atomic_write_text
+
+    yaml_content = yaml.dump(
+        policy.to_dict(),
+        default_flow_style=False,
+        allow_unicode=True,
+        sort_keys=False,
+    )
+    atomic_write_text(config_path, yaml_content, mkdir=False)

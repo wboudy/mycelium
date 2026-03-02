@@ -104,6 +104,57 @@ def is_draft_scope(vault_relative_path: str) -> bool:
     return classify_scope(vault_relative_path) is ScopeClassification.DRAFT
 
 
+class PathTraversalError(ValueError):
+    """Raised when a path escapes its expected root directory."""
+
+
+def safe_vault_path(vault_root: Path, relative_path: str) -> Path:
+    """Resolve a vault-relative path, ensuring it stays within vault_root.
+
+    Prevents path traversal attacks where a relative_path like
+    ``../../etc/passwd`` would escape the vault root.
+
+    Args:
+        vault_root: Absolute path to the vault root directory.
+        relative_path: A vault-relative path string.
+
+    Returns:
+        The resolved absolute path guaranteed to be within vault_root.
+
+    Raises:
+        PathTraversalError: If the resolved path escapes vault_root.
+    """
+    resolved = (vault_root / relative_path).resolve()
+    vault_resolved = vault_root.resolve()
+    if not (resolved == vault_resolved or str(resolved).startswith(str(vault_resolved) + "/")):
+        raise PathTraversalError(
+            f"Path traversal detected: '{relative_path}' escapes vault root"
+        )
+    return resolved
+
+
+def sanitize_path_component(component: str) -> str:
+    """Sanitize a single path component (e.g. note_id, run_id) for safe use in filenames.
+
+    Removes path separators and traversal sequences to prevent
+    directory escape when the component is used in filename construction.
+
+    Args:
+        component: A string to be used as part of a filename.
+
+    Returns:
+        Sanitized string with path separators and traversal removed.
+
+    Raises:
+        PathTraversalError: If the component contains path traversal sequences.
+    """
+    if ".." in component or "/" in component or "\\" in component:
+        raise PathTraversalError(
+            f"Path traversal detected in component: '{component}'"
+        )
+    return component
+
+
 def all_vault_dirs() -> list[str]:
     """Return all vault directories from the §4.1 layout table.
 

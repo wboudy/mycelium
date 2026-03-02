@@ -273,16 +273,21 @@ def save_review_packet(vault_root: Path, packet: dict[str, Any]) -> Path:
     digest_dir = vault_root / "Inbox" / "ReviewDigest"
     digest_dir.mkdir(parents=True, exist_ok=True)
 
+    from mycelium.vault_layout import sanitize_path_component
+
     packet_id = packet["packet_id"]
+    sanitize_path_component(packet_id)
     file_path = digest_dir / f"{packet_id}.yaml"
 
-    with open(file_path, "w") as f:
-        yaml.dump(
-            packet, f,
-            default_flow_style=False,
-            allow_unicode=True,
-            sort_keys=False,
-        )
+    from mycelium.atomic_write import atomic_write_text
+
+    yaml_content = yaml.dump(
+        packet,
+        default_flow_style=False,
+        allow_unicode=True,
+        sort_keys=False,
+    )
+    atomic_write_text(file_path, yaml_content, mkdir=False)
 
     logger.info("Review packet written: %s", file_path)
     return file_path

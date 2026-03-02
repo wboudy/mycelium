@@ -245,11 +245,16 @@ def save_decision_record(
     digest_dir = vault_root / "Inbox" / "ReviewDigest"
     digest_dir.mkdir(parents=True, exist_ok=True)
 
+    from mycelium.vault_layout import sanitize_path_component
+
     decision_id = record["decision_id"]
+    sanitize_path_component(decision_id)
     file_path = digest_dir / f"{decision_id}.yaml"
 
-    with open(file_path, "w", encoding="utf-8") as f:
-        yaml.dump(record, f, default_flow_style=False, allow_unicode=True, sort_keys=False)
+    from mycelium.atomic_write import atomic_write_text
+
+    yaml_content = yaml.dump(record, default_flow_style=False, allow_unicode=True, sort_keys=False)
+    atomic_write_text(file_path, yaml_content, mkdir=False)
 
     return file_path
 

@@ -47,11 +47,10 @@ class SourceIndex:
 
     def _save(self) -> None:
         """Persist index to disk."""
-        self._index_path.parent.mkdir(parents=True, exist_ok=True)
-        self._index_path.write_text(
-            json.dumps(self._data, indent=2, sort_keys=True),
-            encoding="utf-8",
-        )
+        from mycelium.atomic_write import atomic_write_text
+
+        content = json.dumps(self._data, indent=2, sort_keys=True)
+        atomic_write_text(self._index_path, content, mkdir=True)
 
     def lookup(
         self, normalized_locator: str, fingerprint: str
