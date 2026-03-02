@@ -41,17 +41,21 @@ _API_KEY_PATTERNS = [
     ),
 ]
 
-# Email addresses
+# Email addresses (includes Unicode local parts and IDN domains)
 _EMAIL_PATTERN = re.compile(
-    r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}",
+    r"[\w.%+-]+@[\w.-]+\.\w{2,}",
+    re.UNICODE,
 )
 
-# Phone numbers (various formats)
+# Phone numbers (various formats, requires separators to avoid false
+# positives on plain numeric strings like IDs and account numbers)
 _PHONE_PATTERN = re.compile(
-    r"(?:\+\d{1,3}[-.\s]?)?"          # optional country code
-    r"(?:\(?\d{2,4}\)?[-.\s]?)"       # area code
-    r"(?:\d{3,4}[-.\s]?)"             # first part
-    r"\d{3,4}",                        # second part
+    r"(?<!\w)"                            # not preceded by a word char
+    r"(?:\+\d{1,3}[-.\s])?"              # optional country code (must have separator)
+    r"(?:\(?\d{2,4}\)?[-.\s])"           # area code (must have separator after)
+    r"(?:\d{3,4}[-.\s])"                 # first part (must have separator after)
+    r"\d{3,4}"                            # second part
+    r"(?!\w)",                            # not followed by a word char
 )
 
 # Local absolute paths (Unix and Windows)
