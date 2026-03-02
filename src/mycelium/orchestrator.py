@@ -94,7 +94,7 @@ def save_progress(mission_path: Path, progress: dict[str, Any]) -> None:
         progress_file = mission_path / "progress.yaml"
     
     with open(progress_file, "w") as f:
-        yaml.dump(progress, f, default_flow_style=False, allow_unicode=True, sort_keys=False)
+        yaml.safe_dump(progress, f, default_flow_style=False, allow_unicode=True, sort_keys=False)
 
 
 def get_agent_template(repo_root: Path, agent_role: str) -> str:
@@ -148,7 +148,7 @@ def build_agent_prompt(
     agent_template = get_agent_template(repo_root, agent_role)
     
     # Format progress.yaml as YAML for context
-    progress_yaml = yaml.dump(progress, default_flow_style=False, allow_unicode=True)
+    progress_yaml = yaml.safe_dump(progress, default_flow_style=False, allow_unicode=True)
     
     # Build system message with full context
     system_content = f"""You are the {agent_role} agent in the Mycelium multi-agent workflow.

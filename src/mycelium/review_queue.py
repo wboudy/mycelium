@@ -244,7 +244,7 @@ def save_queue_item(vault_root: Path, item: dict[str, Any]) -> Path:
     sanitize_path_component(queue_id)
     file_path = queue_dir / f"{queue_id}.yaml"
 
-    yaml_content = yaml.dump(item, default_flow_style=False, allow_unicode=True, sort_keys=False)
+    yaml_content = yaml.safe_dump(item, default_flow_style=False, allow_unicode=True, sort_keys=False)
     atomic_write_text(file_path, yaml_content, mkdir=False)
 
     logger.info(f"Queue item written: {file_path}")
@@ -308,7 +308,7 @@ def update_queue_item(
     item.update(updates)
     validate_queue_item_strict(item)
 
-    yaml_content = yaml.dump(item, default_flow_style=False, allow_unicode=True, sort_keys=False)
+    yaml_content = yaml.safe_dump(item, default_flow_style=False, allow_unicode=True, sort_keys=False)
     atomic_write_text(file_path, yaml_content, mkdir=False)
 
     return item

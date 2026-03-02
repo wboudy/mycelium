@@ -469,7 +469,7 @@ def _write_bundle(vault_root: Path, bundle: dict[str, Any]) -> str:
 
     from mycelium.atomic_write import atomic_write_text
 
-    yaml_content = yaml.dump(
+    yaml_content = yaml.safe_dump(
         bundle,
         default_flow_style=False,
         allow_unicode=True,

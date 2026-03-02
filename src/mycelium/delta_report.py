@@ -308,7 +308,7 @@ def save_delta_report(vault_root: Path, report: dict[str, Any]) -> Path:
 
     sanitize_path_component(run_id)
     file_path = delta_dir / f"delta-{run_id}.yaml"
-    yaml_content = yaml.dump(report, default_flow_style=False, allow_unicode=True, sort_keys=False)
+    yaml_content = yaml.safe_dump(report, default_flow_style=False, allow_unicode=True, sort_keys=False)
     atomic_write_text(file_path, yaml_content, mkdir=False)
 
     logger.info(f"Delta Report written: {file_path}")
