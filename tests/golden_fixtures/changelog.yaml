@@ -1,0 +1,17 @@
+# Golden Fixture Changelog (AC-TST-G-001-2)
+#
+# Every update to a golden fixture's expected output MUST have a changelog
+# entry describing why outputs changed (e.g., schema version bump or
+# algorithm change).
+#
+# Format:
+#   - date: YYYY-MM-DD
+#     fixture: <fixture_name>
+#     author: <who>
+#     reason: <why the expected output changed>
+
+entries:
+  - date: "2026-03-02"
+    fixture: "all"
+    author: "ChartreuseRidge"
+    reason: "Initial creation of all 6 golden fixture categories per TST-G-001"

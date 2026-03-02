@@ -1,0 +1,55 @@
+# Golden Fixture: corrupted_frontmatter
+# Spec: §13.4 TST-G-001 — "triggers Quarantine behavior"
+# Version: 1
+#
+# Simulates ingestion where the extracted content has malformed YAML
+# frontmatter that cannot be parsed. This should trigger the Quarantine
+# mechanism (§10): the note is moved to Quarantine/ and the Delta Report
+# records a failure with pipeline_status=failed_after_extraction.
+
+input:
+  source_kind: text_bundle
+  source_ref: "file:///notes/broken-note.textbundle"
+  normalized_locator: "notes/broken-note.textbundle"
+  content: |
+    ---
+    type: source
+    id: broken-note
+    status: [invalid yaml here
+    created: not-a-date
+    ---
+    This note has corrupted frontmatter that should fail validation.
+  fingerprint: "sha256:b94d27b9934d3e08a52e52d7da7dabfac484efe37a5380ee9088f7ace2efcde9"
+
+expected_output:
+  run_id: "00000000-0000-0000-0000-000000000000"
+  source_id: "00000000-0000-0000-0000-000000000000"
+  created_at: "2000-01-01T00:00:00.000000Z"
+  source_revision:
+    normalized_locator: "notes/broken-note.textbundle"
+    fingerprint: "sha256:b94d27b9934d3e08a52e52d7da7dabfac484efe37a5380ee9088f7ace2efcde9"
+    prior_fingerprint: null
+  pipeline_status: failed_after_extraction
+  counts:
+    total_extracted_claims: 0
+    exact_count: 0
+    near_duplicate_count: 0
+    supporting_count: 0
+    contradicting_count: 0
+    new_count: 0
+  novelty_score: 0.0
+  match_groups:
+    EXACT: []
+    NEAR_DUPLICATE: []
+    SUPPORTING: []
+    CONTRADICTING: []
+    NEW: []
+  conflicts: []
+  warnings: []
+  failures:
+    - code: "ERR_SCHEMA_VALIDATION"
+      message: "Frontmatter validation failed: invalid status, invalid created datetime"
+      stage: "extract"
+      retryable: false
+  new_links: []
+  follow_up_questions: []

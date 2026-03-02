@@ -1,0 +1,63 @@
+# Golden Fixture: idempotency_changed_content
+# Spec: §13.4 TST-G-001 — "same locator, different fingerprint"
+# Version: 1
+#
+# Simulates re-ingestion of a source whose content has changed (different
+# fingerprint) but at the same normalized_locator. The system must:
+# - Reuse the same source_id (locator-based identity)
+# - Record the revision lineage (prior_fingerprint is populated)
+# - Produce a Delta Report reflecting the new claims vs existing vault
+
+input:
+  source_kind: url
+  source_ref: "https://example.com/photosynthesis-overview"
+  normalized_locator: "example.com/photosynthesis-overview"
+  content: |
+    Photosynthesis is the process by which green plants convert sunlight
+    into chemical energy. New research has shown that some bacteria can
+    also perform photosynthesis using infrared light, expanding our
+    understanding of this fundamental biological process.
+  fingerprint: "sha256:2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824"
+  # Prior ingestion at same locator had a different fingerprint
+  prior_fingerprint: "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  # Vault already contains claims from the prior ingestion
+  existing_claims:
+    - claim_id: "photosynthesis-energy--h-a1b2c3d4e5f6"
+      claim_text: "Photosynthesis is the process by which green plants convert sunlight into chemical energy."
+
+expected_output:
+  run_id: "00000000-0000-0000-0000-000000000000"
+  source_id: "00000000-0000-0000-0000-000000000000"
+  created_at: "2000-01-01T00:00:00.000000Z"
+  source_revision:
+    normalized_locator: "example.com/photosynthesis-overview"
+    fingerprint: "sha256:2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824"
+    prior_fingerprint: "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  pipeline_status: completed
+  counts:
+    total_extracted_claims: 2
+    exact_count: 1
+    near_duplicate_count: 0
+    supporting_count: 0
+    contradicting_count: 0
+    new_count: 1
+  novelty_score: 0.5
+  match_groups:
+    EXACT:
+      - extracted_claim_key: "h-a1b2c3d4e5f6"
+        match_class: EXACT
+        similarity: 1.0
+        existing_claim_id: "photosynthesis-energy--h-a1b2c3d4e5f6"
+    NEAR_DUPLICATE: []
+    SUPPORTING: []
+    CONTRADICTING: []
+    NEW:
+      - extracted_claim_key: "h-b8c9d0e1f2a3"
+        match_class: NEW
+        similarity: 0.0
+        existing_claim_id: null
+  conflicts: []
+  warnings: []
+  failures: []
+  new_links: []
+  follow_up_questions: []

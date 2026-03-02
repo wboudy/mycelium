@@ -1,0 +1,69 @@
+# Golden Fixture: delta_new_and_contradict
+# Spec: §13.4 TST-G-001 — "produces at least one NEW and one CONTRADICTING"
+# Version: 1
+#
+# Simulates ingestion of content that introduces a new claim AND contradicts
+# an existing one. The Delta Report must have entries in both NEW and
+# CONTRADICTING match groups, plus at least one Conflict Record.
+
+input:
+  source_kind: url
+  source_ref: "https://example.com/pluto-classification-update"
+  normalized_locator: "example.com/pluto-classification-update"
+  content: |
+    The International Astronomical Union reclassified Pluto as a dwarf planet
+    in 2006. Pluto's orbit is highly eccentric, sometimes bringing it closer
+    to the Sun than Neptune. Recent observations suggest Pluto may have a
+    subsurface ocean of liquid water.
+  fingerprint: "sha256:d7a8fbb307d7809469ca9abcb0082e4f8d5651e46d3cdb762d02d0bf37c9e592"
+  # Vault already contains a contradicting claim about Pluto
+  existing_claims:
+    - claim_id: "pluto-planet--h-f6a7b8c9d0e1"
+      claim_text: "Pluto is the ninth planet in our solar system."
+
+expected_output:
+  run_id: "00000000-0000-0000-0000-000000000000"
+  source_id: "00000000-0000-0000-0000-000000000000"
+  created_at: "2000-01-01T00:00:00.000000Z"
+  source_revision:
+    normalized_locator: "example.com/pluto-classification-update"
+    fingerprint: "sha256:d7a8fbb307d7809469ca9abcb0082e4f8d5651e46d3cdb762d02d0bf37c9e592"
+    prior_fingerprint: null
+  pipeline_status: completed
+  counts:
+    total_extracted_claims: 3
+    exact_count: 0
+    near_duplicate_count: 0
+    supporting_count: 0
+    contradicting_count: 1
+    new_count: 2
+  novelty_score: 0.67
+  match_groups:
+    EXACT: []
+    NEAR_DUPLICATE: []
+    SUPPORTING: []
+    CONTRADICTING:
+      - extracted_claim_key: "h-e1f2a3b4c5d6"
+        match_class: CONTRADICTING
+        similarity: 0.45
+        existing_claim_id: "pluto-planet--h-f6a7b8c9d0e1"
+    NEW:
+      - extracted_claim_key: "h-f2a3b4c5d6e7"
+        match_class: NEW
+        similarity: 0.0
+        existing_claim_id: null
+      - extracted_claim_key: "h-a3b4c5d6e7f8"
+        match_class: NEW
+        similarity: 0.0
+        existing_claim_id: null
+  conflicts:
+    - new_extracted_claim_key: "h-e1f2a3b4c5d6"
+      existing_claim_id: "pluto-planet--h-f6a7b8c9d0e1"
+      evidence:
+        reason: "New source classifies Pluto as dwarf planet; existing claim calls it the ninth planet"
+        new_claim_text: "Pluto was reclassified as a dwarf planet in 2006."
+        existing_claim_text: "Pluto is the ninth planet in our solar system."
+  warnings: []
+  failures: []
+  new_links: []
+  follow_up_questions: []
