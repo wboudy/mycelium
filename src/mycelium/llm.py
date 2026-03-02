@@ -202,7 +202,6 @@ def complete(
             completion_kwargs = {
                 "model": model,
                 "messages": messages,
-                "messages": messages,
                 "max_tokens": max_tokens,
             }
             

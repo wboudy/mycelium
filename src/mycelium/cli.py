@@ -153,10 +153,10 @@ def cmd_auto(args: argparse.Namespace) -> int:
         print(f"❌ Error: Path does not exist: {mission_path}", file=sys.stderr)
         return 1
     
-    # Configuration from args/env
-    max_iterations = args.max_iterations or int(os.environ.get("MYCELIUM_MAX_ITERATIONS", "10"))
-    max_cost = args.max_cost or float(os.environ.get("MYCELIUM_MAX_COST", "1.0"))
-    max_failures = args.max_failures or int(os.environ.get("MYCELIUM_MAX_FAILURES", "3"))
+    # Configuration from args/env — use `is not None` to allow explicit 0 values
+    max_iterations = args.max_iterations if args.max_iterations is not None else int(os.environ.get("MYCELIUM_MAX_ITERATIONS", "10"))
+    max_cost = args.max_cost if args.max_cost is not None else float(os.environ.get("MYCELIUM_MAX_COST", "1.0"))
+    max_failures = args.max_failures if args.max_failures is not None else int(os.environ.get("MYCELIUM_MAX_FAILURES", "3"))
     auto_approve = args.approve or os.environ.get("MYCELIUM_AUTO_APPROVE", "").lower() in ("1", "true", "yes")
     
     print(f"🔄 Auto mode for mission: {mission_path}")
@@ -170,7 +170,8 @@ def cmd_auto(args: argparse.Namespace) -> int:
     iteration = 0
     consecutive_failures = 0
     cumulative_cost = 0.0
-    
+    exit_reason = "complete"
+
     while True:
         # Load current progress
         try:
@@ -202,16 +203,19 @@ def cmd_auto(args: argparse.Namespace) -> int:
         if iteration >= max_iterations:
             print()
             print(f"⚠️  Max iterations ({max_iterations}) reached")
+            exit_reason = "max_iterations"
             break
-        
+
         if cumulative_cost >= max_cost:
             print()
             print(f"⚠️  Max cost (${max_cost:.2f}) exceeded - current: ${cumulative_cost:.4f}")
+            exit_reason = "max_cost"
             break
-        
+
         if consecutive_failures >= max_failures:
             print()
             print(f"⚠️  Max consecutive failures ({max_failures}) reached")
+            exit_reason = "max_failures"
             break
         
         # HITL gate (if not auto-approved)
@@ -271,8 +275,8 @@ def cmd_auto(args: argparse.Namespace) -> int:
     if usage["runs"] > 0:
         print(f"   Total tokens: {usage['total_tokens']:,}")
         print(f"   Total cost: ${usage['total_cost_usd']:.6f}")
-    
-    return 0
+
+    return 0 if exit_reason == "complete" else 2
 
 
 def main() -> int:
