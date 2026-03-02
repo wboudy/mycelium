@@ -2,11 +2,22 @@
 
 ## 1) Scope and Source of Truth
 
-This file governs work in `/Users/will/Developer/mycelium/mycelium`.
+This file governs work in the Mycelium knowledge vault project.
 
-- Primary implementation spec: `docs/plans/mycelium_refactor_plan_apr_round5.md`.
-- Planning artifacts and council outputs: `plans/`.
-- This repo now uses a single worktree model.
+- **What this project is**: A local-first, Obsidian-compatible knowledge vault with a human-gated 7-stage ingestion pipeline (capture, normalize, fingerprint, extract, compare, delta, propose_queue), deduplication engine, review queue, graduation workflow, egress security, and graph analysis.
+- **Primary spec**: `docs/plans/mycelium_refactor_plan_apr_round5.md`.
+- **Source code**: `src/mycelium/` (pipeline stages in `stages/`, commands in `commands/`, MCP server in `mcp/`).
+- **Tests**: `tests/` (2300+ tests).
+- This repo uses a single worktree model.
+
+### Key architectural rules
+
+- **Canonical Scope** (`Sources/`, `Claims/`, `Concepts/`, `Questions/`, `Projects/`, `MOCs/`) is writable only through the `graduate` command.
+- **Draft Scope** (`Inbox/`, `Reports/`, `Logs/`, `Indexes/`, `Quarantine/`) is agent-writable.
+- All vault persistence must use `atomic_write_text()` from `atomic_write.py` (temp file + `os.replace`).
+- All YAML serialization must use `yaml.safe_dump()`, never `yaml.dump()`.
+- User-supplied path components must be validated with `sanitize_path_component()`.
+- Every command returns an `OutputEnvelope` (defined in `models.py`).
 
 ## 2) Precedence
 
@@ -31,7 +42,7 @@ br sync --flush-only
 
 `br` does not run git commands. Persist `.beads` changes manually when needed.
 
-## 4) Role Separation (Critical)
+## 4) Role Separation
 
 There are two roles. Use only the section for your current role.
 
@@ -82,53 +93,12 @@ OUTPUT: <exact file/artifact path>
 DONE: <explicit completion marker>
 ```
 
-Guidance:
-- Yes, include `ROLE: WORKER` explicitly. This reduces role drift.
-- Keep one primary task per prompt.
-- Include requirement IDs or file paths for grounding.
-
 Worker-side interpretation:
 - If prompt says `ROLE: WORKER`, ignore orchestrator responsibilities and execute only worker contract.
 - Worker should begin first response line with `ROLE_ACK: WORKER`.
-- If `ROLE_ACK: WORKER` is missing, orchestrator should resend with a short role-reset prompt before delegating further.
+- If `ROLE_ACK: WORKER` is missing, orchestrator should resend with a short role-reset prompt.
 
-## 8) Palette and Orchestration Prompts
-
-Planning/decomposition keys currently available:
-- `plan`
-- `merge_plan`
-- `merge_paths`
-- `decompose`
-- `review_beads`
-- `review_master_plan_v2`
-- `swarm_beads`
-- `braindump_plan`
-
-Rule:
-- `swarm_beads` is implementation-phase only.
-- Do not use implementation swarm prompts during spec-closure/decomposition.
-
-## 9) Ambiguity Gate Before Decomposition
-
-Do not decompose into beads while blocking ambiguities remain.
-
-Blocking examples:
-- contradictory dependency order
-- unresolved ownership boundaries
-- undefined promotion/rollback criteria
-- unresolved requirement conflicts
-
-If blocked:
-- write a blocking artifact in `plans/`
-- include `NO_BEAD_CREATION_DUE_TO_AMBIGUITY`
-
-## 10) Canonical Update Boundary
-
-- Canonical updates must follow spec-defined promotion flow.
-- Ingest/draft steps must not mutate canonical directories directly.
-- Any emergency bypass requires explicit user authorization + audit note.
-
-## 11) Quality Gates
+## 8) Quality Gates
 
 Fail-closed policy:
 - Do not declare completion while required checks fail unless user explicitly approves exception.
@@ -139,7 +109,15 @@ For behavior changes, include:
 - error path test
 - regression test
 
-## 12) Destructive Action Policy
+Run `pytest` and confirm all tests pass before closing work.
+
+## 9) Canonical Update Boundary
+
+- Canonical updates must follow spec-defined promotion flow (via `graduate`).
+- Ingest/draft steps must not mutate canonical directories directly.
+- Any emergency bypass requires explicit user authorization + audit note.
+
+## 10) Destructive Action Policy
 
 - No destructive commands without explicit user permission.
 - If impact is uncertain, stop and ask.
@@ -149,7 +127,7 @@ For behavior changes, include:
   - affected scope
   - timestamp
 
-## 13) Session Completion (Landing)
+## 11) Session Completion (Landing)
 
 Work is not complete until pushed.
 
@@ -164,7 +142,7 @@ git status
 
 `git status` must be clean or explicitly explain remaining local work.
 
-## 14) Handoff Minimum Schema
+## 12) Handoff Minimum Schema
 
 Every handoff should include:
 - issue id(s) + state
@@ -173,65 +151,43 @@ Every handoff should include:
 - blockers + owner + next action
 - policy exceptions (if any)
 
-<!-- bv-agent-instructions-v1 -->
+## 13) Beads Workflow
 
----
-
-## Beads Workflow Integration
-
-This project uses [beads_viewer](https://github.com/Dicklesworthstone/beads_viewer) for issue tracking. Issues are stored in `.beads/` and tracked in git.
+This project uses beads_rust (`br`) for issue tracking. Issues are stored in `.beads/` and tracked in git.
 
 ### Essential Commands
 
 ```bash
-# View issues (launches TUI - avoid in automated sessions)
-bv
-
-# CLI commands for agents (use these instead)
-bd ready              # Show issues ready to work (no blockers)
-bd list --status=open # All open issues
-bd show <id>          # Full issue details with dependencies
-bd create --title="..." --type=task --priority=2
-bd update <id> --status=in_progress
-bd close <id> --reason="Completed"
-bd close <id1> <id2>  # Close multiple issues at once
-bd sync               # Commit and push changes
+br ready              # Show issues ready to work (no blockers)
+br list --status=open # All open issues
+br show <id>          # Full issue details with dependencies
+br create --title="..." --labels=task --priority P2
+br update <id> --status in_progress
+br close <id> --reason="Completed"
+br sync --flush-only  # Export to JSONL
 ```
 
 ### Workflow Pattern
 
-1. **Start**: Run `bd ready` to find actionable work
-2. **Claim**: Use `bd update <id> --status=in_progress`
-3. **Work**: Implement the task
-4. **Complete**: Use `bd close <id>`
-5. **Sync**: Always run `bd sync` at session end
+1. **Start**: Run `br ready` to find actionable work.
+2. **Claim**: `br update <id> --status in_progress`
+3. **Work**: Implement the task.
+4. **Complete**: `br close <id>`
+5. **Sync**: Always run `br sync --flush-only` at session end.
 
 ### Key Concepts
 
-- **Dependencies**: Issues can block other issues. `bd ready` shows only unblocked work.
-- **Priority**: P0=critical, P1=high, P2=medium, P3=low, P4=backlog (use numbers, not words)
-- **Types**: task, bug, feature, epic, question, docs
-- **Blocking**: `bd dep add <issue> <depends-on>` to add dependencies
+- **Dependencies**: Issues can block other issues. `br ready` shows only unblocked work.
+- **Priority**: P0=critical, P1=high, P2=medium, P3=low, P4=backlog.
+- **Labels**: task, bug, feature, epic, question, docs.
 
 ### Session Protocol
-
-**Before ending any session, run this checklist:**
 
 ```bash
 git status              # Check what changed
 git add <files>         # Stage code changes
-bd sync                 # Commit beads changes
-git commit -m "..."     # Commit code
-bd sync                 # Commit any new beads changes
+br sync --flush-only    # Export beads
+git add .beads/         # Stage beads changes
+git commit -m "..."     # Commit
 git push                # Push to remote
 ```
-
-### Best Practices
-
-- Check `bd ready` at session start to find available work
-- Update status as you work (in_progress → closed)
-- Create new issues with `bd create` when you discover tasks
-- Use descriptive titles and set appropriate priority/type
-- Always `bd sync` before ending session
-
-<!-- end-bv-agent-instructions -->

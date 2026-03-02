@@ -1,14 +1,14 @@
 [project]
 name = "mycelium"
-version = "0.1.0"
-description = "Multi-agent workflow framework for AI-assisted development"
+version = "0.2.0"
+description = "Local-first, Obsidian-compatible knowledge vault with a structured ingestion pipeline"
 readme = "README.md"
 requires-python = ">=3.10"
 license = {text = "MIT"}
 authors = [
     {name = "Will"}
 ]
-keywords = ["ai", "agents", "workflow", "llm"]
+keywords = ["knowledge-management", "obsidian", "ingestion", "claims", "vault"]
 
 dependencies = [
     "pyyaml>=6.0",
