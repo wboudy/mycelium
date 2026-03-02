@@ -19,11 +19,14 @@ import pytest
 
 from mycelium.stages.capture import (
     ERR_CAPTURE_FAILED,
+    ERR_SSRF_BLOCKED,
     ERR_UNSUPPORTED_SOURCE,
     STAGE_NAME,
     RawSourcePayload,
     SourceInput,
     SourceKind,
+    _MAX_RESPONSE_BYTES,
+    _validate_url,
     capture,
 )
 
@@ -43,8 +46,9 @@ class TestCaptureUrl:
         mock_resp.__enter__ = lambda s: s
         mock_resp.__exit__ = MagicMock(return_value=False)
 
-        with patch("urllib.request.urlopen", return_value=mock_resp):
-            payload, env = capture(SourceInput(url="https://example.com"))
+        with patch("mycelium.stages.capture._is_private_ip", return_value=False):
+            with patch("urllib.request.urlopen", return_value=mock_resp):
+                payload, env = capture(SourceInput(url="https://example.com"))
 
         assert payload is not None
         assert payload.source_kind == "url"
@@ -61,8 +65,9 @@ class TestCaptureUrl:
         mock_resp.__enter__ = lambda s: s
         mock_resp.__exit__ = MagicMock(return_value=False)
 
-        with patch("urllib.request.urlopen", return_value=mock_resp):
-            payload, env = capture(SourceInput(url="https://example.com"))
+        with patch("mycelium.stages.capture._is_private_ip", return_value=False):
+            with patch("urllib.request.urlopen", return_value=mock_resp):
+                payload, env = capture(SourceInput(url="https://example.com"))
 
         d = env.to_dict()
         assert d["ok"] is True
@@ -131,11 +136,12 @@ class TestCaptureFailure:
     """AC-4: failures return ERR_CAPTURE_FAILED with stage='capture'."""
 
     def test_url_network_error(self):
-        with patch(
-            "urllib.request.urlopen",
-            side_effect=ConnectionError("Network down"),
-        ):
-            payload, env = capture(SourceInput(url="https://unreachable.example.com"))
+        with patch("mycelium.stages.capture._is_private_ip", return_value=False):
+            with patch(
+                "urllib.request.urlopen",
+                side_effect=ConnectionError("Network down"),
+            ):
+                payload, env = capture(SourceInput(url="https://unreachable.example.com"))
 
         assert payload is None
         assert env.ok is False
@@ -144,13 +150,12 @@ class TestCaptureFailure:
         assert env.errors[0].retryable is True
 
     def test_url_timeout(self):
-        import urllib.error
-
-        with patch(
-            "urllib.request.urlopen",
-            side_effect=TimeoutError("Timed out"),
-        ):
-            payload, env = capture(SourceInput(url="https://slow.example.com"))
+        with patch("mycelium.stages.capture._is_private_ip", return_value=False):
+            with patch(
+                "urllib.request.urlopen",
+                side_effect=TimeoutError("Timed out"),
+            ):
+                payload, env = capture(SourceInput(url="https://slow.example.com"))
 
         assert payload is None
         assert env.ok is False
@@ -226,3 +231,89 @@ class TestSourceKindEnum:
         expected = {"url", "pdf", "doi", "arxiv", "highlights", "book", "text_bundle"}
         actual = {sk.value for sk in SourceKind}
         assert actual == expected
+
+
+# ---------------------------------------------------------------------------
+# SSRF Protection (bd-21p)
+# ---------------------------------------------------------------------------
+
+class TestSSRFProtection:
+    """SSRF protection: scheme allowlist, host blocklist, size cap."""
+
+    def test_blocks_file_scheme(self):
+        err = _validate_url("file:///etc/passwd")
+        assert err is not None
+        assert err.code == ERR_SSRF_BLOCKED
+        assert "file" in err.message
+
+    def test_blocks_ftp_scheme(self):
+        err = _validate_url("ftp://evil.com/data")
+        assert err is not None
+        assert err.code == ERR_SSRF_BLOCKED
+
+    def test_blocks_gopher_scheme(self):
+        err = _validate_url("gopher://evil.com")
+        assert err is not None
+        assert err.code == ERR_SSRF_BLOCKED
+
+    def test_allows_https(self):
+        with patch("mycelium.stages.capture._is_private_ip", return_value=False):
+            err = _validate_url("https://example.com/page")
+        assert err is None
+
+    def test_allows_http(self):
+        with patch("mycelium.stages.capture._is_private_ip", return_value=False):
+            err = _validate_url("http://example.com/page")
+        assert err is None
+
+    def test_blocks_localhost(self):
+        err = _validate_url("http://127.0.0.1/admin")
+        assert err is not None
+        assert err.code == ERR_SSRF_BLOCKED
+        assert "private" in err.message.lower()
+
+    def test_blocks_private_10_network(self):
+        err = _validate_url("http://10.0.0.1/internal")
+        assert err is not None
+        assert err.code == ERR_SSRF_BLOCKED
+
+    def test_blocks_metadata_endpoint(self):
+        err = _validate_url("http://169.254.169.254/latest/meta-data/")
+        assert err is not None
+        assert err.code == ERR_SSRF_BLOCKED
+
+    def test_blocks_no_hostname(self):
+        err = _validate_url("http://")
+        assert err is not None
+        assert err.code == ERR_SSRF_BLOCKED
+
+    def test_capture_url_blocks_ssrf(self):
+        """Integration: capture() rejects SSRF URLs."""
+        payload, env = capture(SourceInput(url="file:///etc/shadow"))
+        assert payload is None
+        assert env.ok is False
+        assert env.errors[0].code == ERR_SSRF_BLOCKED
+
+    def test_capture_url_blocks_private_ip(self):
+        payload, env = capture(SourceInput(url="http://127.0.0.1:8080/secret"))
+        assert payload is None
+        assert env.ok is False
+        assert env.errors[0].code == ERR_SSRF_BLOCKED
+
+    def test_size_cap_enforced(self):
+        """Response exceeding size cap is rejected."""
+        oversized_data = b"X" * (_MAX_RESPONSE_BYTES + 1)
+        mock_resp = MagicMock()
+        mock_resp.read.return_value = oversized_data
+        mock_resp.headers = {"Content-Type": "text/html"}
+        mock_resp.__enter__ = lambda s: s
+        mock_resp.__exit__ = MagicMock(return_value=False)
+
+        with patch("mycelium.stages.capture._is_private_ip", return_value=False):
+            with patch("urllib.request.urlopen", return_value=mock_resp):
+                payload, env = capture(SourceInput(url="https://example.com/huge"))
+
+        assert payload is None
+        assert env.ok is False
+        assert env.errors[0].code == ERR_CAPTURE_FAILED
+        assert "size cap" in env.errors[0].message.lower()

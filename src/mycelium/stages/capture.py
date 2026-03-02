@@ -11,9 +11,11 @@ Spec reference: mycelium_refactor_plan_apr_round5.md §6.1.1
 from __future__ import annotations
 
 import enum
+import ipaddress
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlparse
 
 from mycelium.models import ErrorObject, OutputEnvelope, error_envelope, make_envelope
 
@@ -99,6 +101,85 @@ class RawSourcePayload:
 
 ERR_CAPTURE_FAILED = "ERR_CAPTURE_FAILED"
 ERR_UNSUPPORTED_SOURCE = "ERR_UNSUPPORTED_SOURCE"
+ERR_SSRF_BLOCKED = "ERR_SSRF_BLOCKED"
+
+# ---------------------------------------------------------------------------
+# SSRF protection constants
+# ---------------------------------------------------------------------------
+
+_ALLOWED_SCHEMES = frozenset({"http", "https"})
+_MAX_RESPONSE_BYTES = 50 * 1024 * 1024  # 50 MB
+
+
+def _is_private_ip(hostname: str) -> bool:
+    """Check if a hostname resolves to a private/reserved IP address."""
+    import socket
+
+    try:
+        # Resolve hostname to IP(s)
+        addr_infos = socket.getaddrinfo(hostname, None)
+        for info in addr_infos:
+            ip_str = info[4][0]
+            addr = ipaddress.ip_address(ip_str)
+            if (
+                addr.is_private
+                or addr.is_loopback
+                or addr.is_link_local
+                or addr.is_reserved
+                or addr.is_multicast
+            ):
+                return True
+    except (socket.gaierror, ValueError):
+        # Can't resolve — treat as blocked (fail-closed)
+        return True
+    return False
+
+
+def _validate_url(url: str) -> ErrorObject | None:
+    """Validate a URL for SSRF safety. Returns an ErrorObject on failure."""
+    try:
+        parsed = urlparse(url)
+    except Exception:
+        return ErrorObject(
+            code=ERR_SSRF_BLOCKED,
+            message=f"Malformed URL: {url}",
+            retryable=False,
+            stage=STAGE_NAME,
+            details={"url": url},
+        )
+
+    # Scheme allowlist
+    if parsed.scheme not in _ALLOWED_SCHEMES:
+        return ErrorObject(
+            code=ERR_SSRF_BLOCKED,
+            message=f"Scheme '{parsed.scheme}' is not allowed (only http/https)",
+            retryable=False,
+            stage=STAGE_NAME,
+            details={"url": url, "scheme": parsed.scheme},
+        )
+
+    # Must have a hostname
+    hostname = parsed.hostname
+    if not hostname:
+        return ErrorObject(
+            code=ERR_SSRF_BLOCKED,
+            message="URL has no hostname",
+            retryable=False,
+            stage=STAGE_NAME,
+            details={"url": url},
+        )
+
+    # Host blocklist: block private/internal IPs
+    if _is_private_ip(hostname):
+        return ErrorObject(
+            code=ERR_SSRF_BLOCKED,
+            message=f"Host '{hostname}' resolves to a private/reserved address",
+            retryable=False,
+            stage=STAGE_NAME,
+            details={"url": url, "hostname": hostname},
+        )
+
+    return None
 
 
 # ---------------------------------------------------------------------------
@@ -106,16 +187,32 @@ ERR_UNSUPPORTED_SOURCE = "ERR_UNSUPPORTED_SOURCE"
 # ---------------------------------------------------------------------------
 
 def _capture_url(source_input: SourceInput) -> RawSourcePayload | ErrorObject:
-    """Capture content from a URL."""
+    """Capture content from a URL with SSRF protection and size cap."""
     url = source_input.url
     assert url is not None
+
+    # SSRF validation: scheme allowlist + host blocklist
+    ssrf_error = _validate_url(url)
+    if ssrf_error is not None:
+        return ssrf_error
 
     try:
         import urllib.request
 
         with urllib.request.urlopen(url, timeout=30) as resp:
             content_type = resp.headers.get("Content-Type", "text/html")
-            raw = resp.read()
+
+            # Size cap: read up to _MAX_RESPONSE_BYTES + 1 to detect overflow
+            raw = resp.read(_MAX_RESPONSE_BYTES + 1)
+            if len(raw) > _MAX_RESPONSE_BYTES:
+                return ErrorObject(
+                    code=ERR_CAPTURE_FAILED,
+                    message=f"Response exceeds size cap ({_MAX_RESPONSE_BYTES} bytes)",
+                    retryable=False,
+                    stage=STAGE_NAME,
+                    details={"url": url, "max_bytes": _MAX_RESPONSE_BYTES},
+                )
+
             # Determine encoding
             charset = "utf-8"
             if "charset=" in content_type:
