@@ -331,3 +331,77 @@ class TestAuditLogPath:
         now = datetime.now(timezone.utc)
         path = _audit_log_path(tmp_path)
         assert now.strftime("%Y-%m-%d") in path.name
+
+
+# ---------------------------------------------------------------------------
+# Concurrent write safety
+# ---------------------------------------------------------------------------
+
+class TestConcurrentWrites:
+    """Verify JSONL integrity under concurrent appends."""
+
+    def test_concurrent_writes_produce_valid_jsonl(self, tmp_path: Path):
+        """Multiple threads writing simultaneously must not corrupt JSONL."""
+        import concurrent.futures
+        import json as json_mod
+
+        n_writers = 8
+        events_per_writer = 50
+
+        def writer(thread_id: int) -> list[str]:
+            ids = []
+            for i in range(events_per_writer):
+                eid = f"t{thread_id}-e{i}"
+                emit_event(
+                    tmp_path,
+                    EventType.INGEST_STARTED,
+                    run_id=f"run-t{thread_id}",
+                    event_id=eid,
+                    details={"thread": thread_id, "seq": i},
+                )
+                ids.append(eid)
+            return ids
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=n_writers) as pool:
+            futures = [pool.submit(writer, tid) for tid in range(n_writers)]
+            all_ids: list[str] = []
+            for f in concurrent.futures.as_completed(futures):
+                all_ids.extend(f.result())
+
+        log_path = _audit_log_path(tmp_path)
+        raw = log_path.read_text()
+        lines = [ln for ln in raw.split("\n") if ln.strip()]
+
+        # Every line must parse as valid JSON
+        parsed_ids = set()
+        for line in lines:
+            data = json_mod.loads(line)
+            parsed_ids.add(data["event_id"])
+
+        assert len(lines) == n_writers * events_per_writer
+        assert parsed_ids == set(all_ids)
+
+    def test_large_event_not_interleaved(self, tmp_path: Path):
+        """Events with large details dicts still produce valid single lines."""
+        import json as json_mod
+
+        large_details = {"data": "x" * 8192}
+        emit_event(
+            tmp_path,
+            EventType.INGEST_STARTED,
+            event_id="large-1",
+            details=large_details,
+        )
+        emit_event(
+            tmp_path,
+            EventType.INGEST_COMPLETED,
+            event_id="large-2",
+            details=large_details,
+        )
+
+        log_path = _audit_log_path(tmp_path)
+        lines = [ln for ln in log_path.read_text().split("\n") if ln.strip()]
+        assert len(lines) == 2
+        for line in lines:
+            data = json_mod.loads(line)
+            assert len(data["details"]["data"]) == 8192

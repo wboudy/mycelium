@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import uuid
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
@@ -155,8 +156,15 @@ def emit_event(
     log_path.parent.mkdir(parents=True, exist_ok=True)
 
     # Append-only write (AC-AUD-001-2)
-    with open(log_path, "a") as f:
-        f.write(event.to_json_line() + "\n")
+    # Use os.open with O_APPEND for POSIX atomic seek-to-end + write,
+    # bypassing Python buffered I/O which can split large writes into
+    # multiple syscalls and cause interleaved corruption under concurrency.
+    line_bytes = (event.to_json_line() + "\n").encode("utf-8")
+    fd = os.open(str(log_path), os.O_WRONLY | os.O_APPEND | os.O_CREAT, 0o644)
+    try:
+        os.write(fd, line_bytes)
+    finally:
+        os.close(fd)
 
     logger.info(f"Audit event: {event_type_str} (run_id={run_id})")
     return event
