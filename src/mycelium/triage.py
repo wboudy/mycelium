@@ -12,7 +12,6 @@ from __future__ import annotations
 from dataclasses import dataclass
 from enum import Enum
 
-
 # ─── Constants ────────────────────────────────────────────────────────────
 
 W_CONFLICT = 0.45
@@ -145,8 +144,9 @@ def apply_hysteresis(
                 state.consecutive_below_dense_exit = 0
             # else: stay dense (hysteresis holds)
         else:
+            # Score >= exit threshold: reset counter, stay DENSE.
+            # Hysteresis rule: only exit DENSE after 2 consecutive below 0.62.
             state.consecutive_below_dense_exit = 0
-            state.current_bucket = raw_bucket
 
     elif state.current_bucket == TriageBucket.WATERY:
         if new_score >= HYSTERESIS_WATERY_ENTRY:
