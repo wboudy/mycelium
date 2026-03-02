@@ -79,7 +79,7 @@ labels = [l for l in labels if not l.startswith('agent:')]
 # Optionally: labels.append('agent:complete')
 ```
 
-Then close the bead using `bd close <bead-id>`.
+Then close the bead using `br close <bead-id>`.
 
 ## Output Format
 

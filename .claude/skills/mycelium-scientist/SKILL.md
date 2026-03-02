@@ -32,8 +32,8 @@ Create a concrete, minimal, falsifiable plan for the current bead by adding note
 
 ## Instructions
 
-1. **Identify the current bead** - User provides bead ID, or find from `bd ready`
-2. **Read the bead** - Use `bd show <bead-id>` to get description and context
+1. **Identify the current bead** - User provides bead ID, or find from `br ready`
+2. **Read the bead** - Use `br show <bead-id>` to get description and context
    - If description is missing or empty, STOP and ask user for mission context
 3. **Create the plan** as a notes section:
    - Definition of Done (DoD) items with clear PASS/FAIL criteria

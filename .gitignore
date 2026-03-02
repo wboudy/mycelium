@@ -52,3 +52,6 @@ logs/
 
 # Sandbox toy runs (keep README, ignore toy-* directories)
 sandbox/toy-*/
+
+# bv (beads viewer) local config and caches
+.bv/

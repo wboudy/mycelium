@@ -1,6 +1,6 @@
 # Mycelium Workflow
 
-This document explains the Claude Code + Beads integration workflow for AI-assisted development.
+This document explains the Claude Code + Beads Rust integration workflow for AI-assisted development.
 
 ## Overview
 
@@ -10,7 +10,9 @@ Mycelium uses a multi-agent workflow where each agent has specific responsibilit
 Scientist → Implementer → Verifier → Maintainer → Complete
 ```
 
-State is tracked via **beads** (git-backed issue tracker) with `agent:*` labels.
+State is tracked via **beads_rust** (git-backed issue tracker) with `agent:*` labels.
+
+**Note:** `br` is non-invasive and never executes git commands. After `br sync --flush-only`, you must manually run `git add .beads/ && git commit`.
 
 ## Agent Roles
 
@@ -45,10 +47,10 @@ State is tracked via **beads** (git-backed issue tracker) with `agent:*` labels.
 
 ```bash
 # See what's ready to work on
-bd ready
+br ready
 
 # Check a bead's current state
-bd show <bead-id>
+br show <bead-id>
 
 # Start scientist planning
 /mycelium-scientist
@@ -108,8 +110,8 @@ All state lives in `.beads/issues.jsonl`:
 
 1. **Create bead** with mission context
    ```bash
-   bd create "Add dark mode toggle" --type feature
-   bd label mycelium-abc agent:scientist
+   br create "Add dark mode toggle" --type feature
+   br label mycelium-abc agent:scientist
    ```
 
 2. **Scientist** creates plan
@@ -122,7 +124,7 @@ All state lives in `.beads/issues.jsonl`:
 
 3. **Human implements** the plan
    - Write code following the plan
-   - When done, manually transition: `bd label mycelium-abc agent:verifier`
+   - When done, manually transition: `br label mycelium-abc agent:verifier`
 
 4. **Verifier** checks DoD
    ```

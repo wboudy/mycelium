@@ -31,8 +31,8 @@ You MAY run commands. Only patch code if explicitly allowed.
 
 ## Instructions
 
-1. **Identify the current bead** - User provides bead ID, or find from `bd ready`
-2. **Read the bead** - Use `bd show <bead-id>` or read `.beads/issues.jsonl`
+1. **Identify the current bead** - User provides bead ID, or find from `br ready`
+2. **Read the bead** - Use `br show <bead-id>` or read `.beads/issues.jsonl`
 3. **Review the plan** - Read DoD from bead notes
 4. **Verify each DoD item** - PASS/FAIL + evidence
 5. **Re-run documented command(s)** when feasible

@@ -31,7 +31,7 @@ scientist → implementer → verifier → maintainer → complete
 
 ## Instructions
 
-1. **Identify the bead** - User provides bead ID, or use `bd ready` to find work
+1. **Identify the bead** - User provides bead ID, or use `br ready` to find work
 2. **Read the bead's labels** - Look for `agent:*` label
 3. **Invoke the appropriate skill**:
 
