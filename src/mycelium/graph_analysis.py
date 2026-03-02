@@ -298,7 +298,7 @@ def find_connected_components(
     for node in sorted(nodes):
         if node in visited:
             continue
-        # BFS
+        # DFS (stack-based traversal)
         component: list[str] = []
         queue = [node]
         while queue:

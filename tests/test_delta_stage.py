@@ -38,9 +38,6 @@ FP = "sha256:" + "a" * 64
 
 def _compare_result(*records: tuple[str, float, str | None]) -> CompareResult:
     """Build a CompareResult from (match_class, similarity, existing_id) tuples."""
-    from mycelium.comparator import classify_similarity
-    from mycelium.canonicalize import extracted_claim_key
-
     result = CompareResult()
     for i, (mc_val, sim, eid) in enumerate(records):
         mc = MatchClass(mc_val)

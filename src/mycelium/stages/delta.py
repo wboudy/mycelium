@@ -26,7 +26,6 @@ from mycelium.models import (
     WarningObject,
     make_envelope,
 )
-from mycelium.novelty import compute_novelty_score
 from mycelium.stages.compare import compare_result_to_match_groups
 
 STAGE_NAME = "delta"
