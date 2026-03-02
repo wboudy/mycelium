@@ -15,7 +15,7 @@ Spec reference: §5.2.3 CMD-REV-001, §8.2 REV-002
 from __future__ import annotations
 
 import uuid
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from enum import Enum
 from pathlib import Path
@@ -26,11 +26,8 @@ import yaml
 from mycelium.models import (
     ErrorObject,
     OutputEnvelope,
-    WarningObject,
-    error_envelope,
     make_envelope,
 )
-
 
 # ─── Domain types ─────────────────────────────────────────────────────────
 
@@ -253,7 +250,9 @@ def save_decision_record(
 
     from mycelium.atomic_write import atomic_write_text
 
-    yaml_content = yaml.dump(record, default_flow_style=False, allow_unicode=True, sort_keys=False)
+    yaml_content = yaml.safe_dump(
+        record, default_flow_style=False, allow_unicode=True, sort_keys=False,
+    )
     atomic_write_text(file_path, yaml_content, mkdir=False)
 
     return file_path

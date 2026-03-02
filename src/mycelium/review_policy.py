@@ -23,7 +23,6 @@ import yaml
 
 from mycelium.models import ErrorObject, OutputEnvelope, WarningObject, make_envelope
 
-
 CONFIG_RELATIVE_PATH = "Config/review_policy.yaml"
 
 # Defaults per spec
@@ -177,7 +176,11 @@ def load_review_policy(
     # Build policy from valid config
     hold_ttl = raw.get("hold_ttl_days", DEFAULT_HOLD_TTL_DAYS)
     git_mode = raw.get("git_mode", {})
-    git_enabled = git_mode.get("enabled", DEFAULT_GIT_MODE_ENABLED) if isinstance(git_mode, dict) else DEFAULT_GIT_MODE_ENABLED
+    git_enabled = (
+        git_mode.get("enabled", DEFAULT_GIT_MODE_ENABLED)
+        if isinstance(git_mode, dict)
+        else DEFAULT_GIT_MODE_ENABLED
+    )
 
     policy = ReviewPolicy(
         hold_ttl_days=hold_ttl,
@@ -199,7 +202,7 @@ def save_review_policy(vault_root: Path, policy: ReviewPolicy) -> None:
 
     from mycelium.atomic_write import atomic_write_text
 
-    yaml_content = yaml.dump(
+    yaml_content = yaml.safe_dump(
         policy.to_dict(),
         default_flow_style=False,
         allow_unicode=True,

@@ -16,14 +16,13 @@ from __future__ import annotations
 
 import copy
 import shutil
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable
 
 import yaml
 
 from mycelium.note_format import parse_note
-
 
 # Type alias for migration functions
 MigrationFn = Callable[[dict[str, Any]], dict[str, Any]]
@@ -109,17 +108,22 @@ class MigrationRegistry:
     def get_migrations_before(self, target_version: str) -> list[Migration]:
         """Return migrations to rollback to reach target_version (in reverse order).
 
+        To roll back FROM the current state TO target_version, we need to
+        undo all migrations that were applied AFTER target_version.
+
         Args:
             target_version: The version to roll back to.
 
         Returns:
             List of migrations to roll back (in reverse order).
         """
+        found = False
         result: list[Migration] = []
         for m in self._migrations:
+            if found:
+                result.append(m)
             if m.version == target_version:
-                break
-            result.append(m)
+                found = True
         result.reverse()
         return result
 
@@ -171,7 +175,7 @@ def migrate_note_content(
         fm = apply_migration_to_frontmatter(fm, m, direction=direction)
 
     # Reconstruct note
-    fm_yaml = yaml.dump(fm, default_flow_style=False, allow_unicode=True, sort_keys=False)
+    fm_yaml = yaml.safe_dump(fm, default_flow_style=False, allow_unicode=True, sort_keys=False)
     return f"---\n{fm_yaml}---\n{body}"
 
 

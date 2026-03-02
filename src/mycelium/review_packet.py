@@ -9,7 +9,7 @@ Spec reference: §4.2.9 SCH-009
 from __future__ import annotations
 
 import logging
-from datetime import date, datetime
+from datetime import date
 from pathlib import Path
 from typing import Any
 
@@ -281,7 +281,7 @@ def save_review_packet(vault_root: Path, packet: dict[str, Any]) -> Path:
 
     from mycelium.atomic_write import atomic_write_text
 
-    yaml_content = yaml.dump(
+    yaml_content = yaml.safe_dump(
         packet,
         default_flow_style=False,
         allow_unicode=True,
@@ -311,6 +311,9 @@ def load_review_packet(file_path: Path) -> dict[str, Any]:
 
     with open(file_path) as f:
         packet = yaml.safe_load(f)
+
+    if packet is None:
+        raise SchemaValidationError(["Review packet file is empty or contains no YAML data"])
 
     validate_review_packet_strict(packet)
     return packet

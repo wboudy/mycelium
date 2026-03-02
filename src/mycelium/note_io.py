@@ -14,7 +14,6 @@ from typing import Any
 
 import yaml
 
-
 # ── YAML frontmatter delimiters ─────────────────────────────────────────────
 
 _FM_DELIMITER = "---"
@@ -70,7 +69,7 @@ def render_note(frontmatter: dict[str, Any], body: str) -> str:
     Returns:
         The full note text ready for writing to disk.
     """
-    fm_text = yaml.dump(
+    fm_text = yaml.safe_dump(
         frontmatter,
         default_flow_style=False,
         allow_unicode=True,

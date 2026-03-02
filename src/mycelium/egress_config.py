@@ -22,7 +22,6 @@ import yaml
 
 from mycelium.audit import EventType, emit_event
 
-
 # ── Constants ─────────────────────────────────────────────────────────
 
 EGRESS_MODES = frozenset({"report_only", "enforce"})
@@ -172,7 +171,7 @@ def save_egress_policy(vault_root: Path, config: EgressPolicyConfig) -> Path:
 
     from mycelium.atomic_write import atomic_write_text
 
-    yaml_content = yaml.dump(
+    yaml_content = yaml.safe_dump(
         config.to_dict(),
         default_flow_style=False,
         allow_unicode=True,

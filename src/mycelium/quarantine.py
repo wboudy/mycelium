@@ -16,7 +16,7 @@ Spec reference: mycelium_refactor_plan_apr_round5.md §10.2 (ERR-002)
 from __future__ import annotations
 
 import shutil
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -173,7 +173,7 @@ def quarantine_file(
     # Write the diagnostic sidecar (atomic write for consistency)
     from mycelium.atomic_write import atomic_write_text
 
-    yaml_content = yaml.dump(record.to_dict(), default_flow_style=False, allow_unicode=True)
+    yaml_content = yaml.safe_dump(record.to_dict(), default_flow_style=False, allow_unicode=True)
     atomic_write_text(s_path, yaml_content, mkdir=False)
 
     # Return vault-relative paths
