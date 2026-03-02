@@ -231,9 +231,20 @@ def graduate(
             })
             continue
 
+        # Overwrite guard: reject if canonical note already exists
+        target = vault_dir / canonical_path
+        if target.exists():
+            rejected.append({
+                "queue_id": queue_id,
+                "reason": (
+                    f"Canonical note already exists at '{canonical_path}'. "
+                    "Refusing to overwrite."
+                ),
+            })
+            continue
+
         # AC-CMD-GRD-001-2: Update status to canon and write to canonical scope
         frontmatter["status"] = "canon"
-        target = vault_dir / canonical_path
         try:
             write_note(target, frontmatter, body)
         except OSError as exc:
@@ -242,6 +253,36 @@ def graduate(
                 "reason": f"Failed to write canonical note: {exc}",
             })
             continue
+
+        # Queue status update: mark review queue item as approved
+        # Sanitize queue_id to prevent path traversal (e.g. "../../etc/passwd")
+        safe_qid = Path(queue_id).name  # strip any directory components
+        if not safe_qid or safe_qid != queue_id:
+            rejected.append({
+                "queue_id": queue_id,
+                "reason": f"Invalid queue_id (path traversal attempt): {queue_id!r}",
+            })
+            continue
+        queue_file = vault_dir / "Inbox" / "ReviewQueue" / f"{safe_qid}.yaml"
+        if queue_file.exists():
+            try:
+                from mycelium.review_queue import update_queue_item
+
+                update_queue_item(
+                    queue_file,
+                    {"status": "approved"},
+                    is_state_transition=True,
+                )
+            except Exception:
+                pass  # Best-effort; promotion already succeeded
+
+        # Draft cleanup: remove the original draft file
+        draft_path = vault_dir / vault_path
+        try:
+            if draft_path.exists():
+                draft_path.unlink()
+        except OSError:
+            pass  # Best-effort; promotion already succeeded
 
         promoted.append({
             "queue_id": queue_id,

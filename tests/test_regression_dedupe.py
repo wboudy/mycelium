@@ -294,15 +294,14 @@ class TestRepromotionIdempotency:
         assert env1.ok is True
         assert len(env1.data["promoted"]) == 1
 
-        # Second run: the original draft is still at the draft path,
-        # but the note at canonical path now has status=canon.
-        # Re-running should still work (overwrite is acceptable).
+        # Second run: the canonical note already exists from the first
+        # promotion. The overwrite guard should reject re-promotion.
         write_note(
             tmp_path / "Inbox" / "Sources" / "det-note.md",
             fm,
             "# Deterministic\n",
         )
         env2 = graduate(tmp_path, params, items)
-        assert env2.ok is True
-        # Same structural result
-        assert len(env2.data["promoted"]) == len(env1.data["promoted"])
+        assert env2.ok is True  # per-item atomicity: envelope is ok
+        assert len(env2.data["rejected"]) == 1
+        assert "already exists" in env2.data["rejected"][0]["reason"]

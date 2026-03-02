@@ -280,6 +280,140 @@ class TestDryRun:
 
 # ─── Output envelope ──────────────────────────────────────────────────────
 
+# ─── Overwrite guard ─────────────────────────────────────────────────────
+
+class TestOverwriteGuard:
+    """Promotion must not overwrite an existing canonical note."""
+
+    def test_rejects_if_canonical_exists(self, tmp_path: Path):
+        vault = tmp_path
+        _create_draft_note(vault, "Inbox/Sources/s-001.md", "source", "s-001")
+        # Pre-create the canonical note
+        (vault / "Sources").mkdir(parents=True, exist_ok=True)
+        (vault / "Sources" / "s-001.md").write_text("existing canonical content")
+
+        result = graduate(
+            vault,
+            GraduateInput(strict=True),
+            [{"queue_id": "q1", "path": "Inbox/Sources/s-001.md", "decision": "approve"}],
+        )
+
+        assert result.ok is True
+        assert len(result.data["rejected"]) == 1
+        assert "already exists" in result.data["rejected"][0]["reason"]
+        # Original canonical content is untouched
+        assert (vault / "Sources" / "s-001.md").read_text() == "existing canonical content"
+
+    def test_promotes_when_canonical_absent(self, tmp_path: Path):
+        vault = tmp_path
+        _create_draft_note(vault, "Inbox/Sources/s-002.md", "source", "s-002")
+
+        result = graduate(
+            vault,
+            GraduateInput(strict=True),
+            [{"queue_id": "q1", "path": "Inbox/Sources/s-002.md", "decision": "approve"}],
+        )
+
+        assert result.ok is True
+        assert len(result.data["promoted"]) == 1
+        assert (vault / "Sources" / "s-002.md").exists()
+
+
+# ─── Queue status update ────────────────────────────────────────────────
+
+class TestQueueStatusUpdate:
+    """After promotion, the queue item status should be updated to 'approved'."""
+
+    def test_queue_item_updated_on_promote(self, tmp_path: Path):
+        import yaml as _yaml
+
+        vault = tmp_path
+        _create_draft_note(vault, "Inbox/Sources/s-001.md", "source", "s-001")
+
+        # Create a matching queue item file
+        queue_dir = vault / "Inbox" / "ReviewQueue"
+        queue_dir.mkdir(parents=True, exist_ok=True)
+        queue_item = {
+            "queue_id": "q1",
+            "run_id": "run-1",
+            "item_type": "source_note",
+            "target_path": "Inbox/Sources/s-001.md",
+            "proposed_action": "promote_to_canon",
+            "status": "pending_review",
+            "created_at": "2026-03-01T00:00:00Z",
+            "checks": {},
+        }
+        (queue_dir / "q1.yaml").write_text(
+            _yaml.safe_dump(queue_item, default_flow_style=False)
+        )
+
+        result = graduate(
+            vault,
+            GraduateInput(strict=True),
+            [{"queue_id": "q1", "path": "Inbox/Sources/s-001.md", "decision": "approve"}],
+        )
+
+        assert result.ok is True
+        assert len(result.data["promoted"]) == 1
+
+        # Queue item should now be "approved"
+        updated = _yaml.safe_load((queue_dir / "q1.yaml").read_text())
+        assert updated["status"] == "approved"
+
+
+# ─── Draft cleanup ──────────────────────────────────────────────────────
+
+class TestDraftCleanup:
+    """After successful promotion, the original draft file should be removed."""
+
+    def test_draft_removed_after_promotion(self, tmp_path: Path):
+        vault = tmp_path
+        _create_draft_note(vault, "Inbox/Sources/s-001.md", "source", "s-001")
+        assert (vault / "Inbox" / "Sources" / "s-001.md").exists()
+
+        result = graduate(
+            vault,
+            GraduateInput(strict=True),
+            [{"queue_id": "q1", "path": "Inbox/Sources/s-001.md", "decision": "approve"}],
+        )
+
+        assert result.ok is True
+        assert len(result.data["promoted"]) == 1
+        # Draft should be gone
+        assert not (vault / "Inbox" / "Sources" / "s-001.md").exists()
+        # Canonical should exist
+        assert (vault / "Sources" / "s-001.md").exists()
+
+    def test_draft_preserved_on_dry_run(self, tmp_path: Path):
+        vault = tmp_path
+        _create_draft_note(vault, "Inbox/Sources/s-001.md", "source", "s-001")
+
+        result = graduate(
+            vault,
+            GraduateInput(dry_run=True, strict=True),
+            [{"queue_id": "q1", "path": "Inbox/Sources/s-001.md", "decision": "approve"}],
+        )
+
+        assert result.ok is True
+        # Draft should still exist (dry run doesn't write or delete)
+        assert (vault / "Inbox" / "Sources" / "s-001.md").exists()
+
+    def test_draft_preserved_when_held(self, tmp_path: Path):
+        vault = tmp_path
+        _create_draft_note(vault, "Inbox/Sources/s-001.md", "source", "s-001")
+
+        result = graduate(
+            vault,
+            GraduateInput(strict=True),
+            [{"queue_id": "q1", "path": "Inbox/Sources/s-001.md", "decision": "hold"}],
+        )
+
+        assert result.ok is True
+        assert (vault / "Inbox" / "Sources" / "s-001.md").exists()
+
+
+# ─── Output envelope ──────────────────────────────────────────────────────
+
 class TestOutputEnvelope:
 
     def test_envelope_has_correct_command(self, tmp_path: Path):
