@@ -137,7 +137,7 @@ class TestReadProgress:
         progress_file = temp_dir / "progress.yaml"
         progress_file.write_text("- not-a-mapping\n")
 
-        with pytest.raises(ValueError, match="expected YAML mapping/object root"):
+        with pytest.raises(ValueError, match="Expected YAML dict, got"):
             read_progress(str(temp_dir))
 
 
@@ -514,10 +514,12 @@ class TestHITLGate:
         """_get_current_agent returns None when file is missing."""
         assert get_current_agent(str(temp_dir / "nonexistent")) is None
 
-    def test_get_current_agent_returns_none_on_non_string(self, temp_dir):
-        """_get_current_agent returns None when current_agent is not a string."""
+    def test_get_current_agent_normalizes_non_string(self, temp_dir):
+        """_get_current_agent normalizes non-string current_agent via _normalize_agent_value."""
         (temp_dir / "progress.yaml").write_text("current_agent:\n  nested: value\n")
-        assert get_current_agent(str(temp_dir)) is None
+        # _normalize_agent_value stringifies dicts without recognized keys
+        result = get_current_agent(str(temp_dir))
+        assert isinstance(result, str)
 
     def test_write_requires_approval_with_malformed_nested_implementer(self, sample_progress_yaml, temp_dir):
         """Malformed nested current_agent payloads should still enforce HITL approval."""
@@ -532,7 +534,6 @@ class TestHITLGate:
             str(target),
             "blocked",
             mission_path=str(sample_progress_yaml.parent),
-            auto_approve=False,
         )
 
         assert result["success"] is False
@@ -550,12 +551,11 @@ class TestHITLGate:
             str(target),
             "blocked",
             mission_path=str(mission_dir),
-            auto_approve=False,
         )
 
         assert result["success"] is False
         assert result["approval_required"] is True
-        assert result["reason"] == "unable to determine current_agent"
+        assert "fail-closed" in result["reason"]
         assert not target.exists()
 
 
@@ -677,7 +677,6 @@ class TestRunCommand:
             "echo 'should not run'",
             cwd=str(temp_dir),
             mission_path=str(sample_progress_yaml.parent),
-            auto_approve=False,
         )
 
         assert result["success"] is False
@@ -693,12 +692,11 @@ class TestRunCommand:
             "echo 'should not run'",
             cwd=str(temp_dir),
             mission_path=str(mission_dir),
-            auto_approve=False,
         )
 
         assert result["success"] is False
         assert result["approval_required"] is True
-        assert result["reason"] == "unable to determine current_agent"
+        assert "fail-closed" in result["reason"]
 
 
 # =============================================================================

@@ -125,7 +125,8 @@ def _get_current_agent(mission_path: str) -> str | None:
             progress = yaml.safe_load(f) or {}
         if not isinstance(progress, dict):
             return None
-        return _normalize_agent_value(progress.get("current_agent", ""))
+        normalized = _normalize_agent_value(progress.get("current_agent", ""))
+        return normalized if normalized else None
     except Exception:
         return None
 
