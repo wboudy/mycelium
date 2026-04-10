@@ -1,0 +1,12 @@
+mode: report_only
+allowlist:
+  - "Sources/**"
+  - "Claims/**"
+  - "Concepts/**"
+  - "Questions/**"
+  - "MOCs/**"
+blocklist:
+  - "Logs/Audit/**"
+  - "**/*.key"
+  - "**/*.pem"
+  - "**/*secret*"
