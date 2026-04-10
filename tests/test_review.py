@@ -201,18 +201,16 @@ class TestExecuteReview:
         assert len(env.errors) >= 1
         assert env.errors[0].code == ERR_QUEUE_ITEM_INVALID
 
-    def test_direct_mode_returns_envelope(self):
+    def test_direct_mode_nonexistent_queue_item(self):
         env = execute_review({
-            "queue_id": "q1",
+            "queue_id": "q-nonexistent",
             "decision": "approve",
         })
-        assert env.ok is True
-        assert env.command == "review"
-        assert "updated" in env.data
-        assert "held" in env.data
+        assert env.ok is False
+        assert env.errors[0].code == ERR_QUEUE_ITEM_INVALID
 
     def test_envelope_has_required_keys(self):
-        env = execute_review({"queue_id": "q1", "decision": "reject"})
+        env = execute_review({"queue_id": "q-nonexistent", "decision": "reject"})
         d = env.to_dict()
         assert set(d.keys()) == {"ok", "command", "timestamp", "data", "errors", "warnings", "trace"}
 

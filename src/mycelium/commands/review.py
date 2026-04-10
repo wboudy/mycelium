@@ -376,14 +376,85 @@ def execute_review(raw_input: dict[str, Any]) -> OutputEnvelope:
             },
         )
 
-    # Direct mode: validate and apply transitions
-    # In full integration, we'd load queue items from the vault.
-    # The contract layer validates the transition logic.
+    # Direct mode: load queue item from vault and apply transition
+    import os
+    from pathlib import Path
+
+    vault_root_str = os.environ.get("MYCELIUM_VAULT_ROOT", "vault")
+    vault_root = Path(vault_root_str).resolve()
+    queue_dir = vault_root / "Inbox" / "ReviewQueue"
+
+    if not queue_dir.exists():
+        return make_envelope("review", errors=[ErrorObject(
+            code=ERR_QUEUE_ITEM_INVALID,
+            message="Review queue directory not found",
+            retryable=False,
+        )])
+
+    # Find the queue item
+    queue_id = review_input.queue_id
+    if not queue_id:
+        return make_envelope("review", errors=[ErrorObject(
+            code=ERR_QUEUE_ITEM_INVALID,
+            message="queue_id is required for direct mode",
+            retryable=False,
+        )])
+
+    queue_file = queue_dir / f"{queue_id}.yaml"
+    if not queue_file.exists():
+        return make_envelope("review", errors=[ErrorObject(
+            code=ERR_QUEUE_ITEM_INVALID,
+            message=f"Queue item not found: {queue_id}",
+            retryable=False,
+        )])
+
+    # Load queue item
+    import yaml
+    with open(queue_file) as f:
+        queue_item = yaml.safe_load(f) or {}
+
+    current_status = queue_item.get("status", "pending_review")
+
+    # Apply transition
+    decision = review_input.decision
+    if decision is None:
+        return make_envelope("review", errors=[ErrorObject(
+            code=ERR_QUEUE_ITEM_INVALID,
+            message="decision is required for direct mode",
+            retryable=False,
+        )])
+
+    result = apply_transition(current_status, decision)
+    if isinstance(result, ErrorObject):
+        return make_envelope("review", errors=[result])
+
+    # Update queue item on disk
+    if result is not None:
+        queue_item["status"] = result.value
+    with open(queue_file, "w") as f:
+        yaml.safe_dump(queue_item, f, default_flow_style=False, allow_unicode=True, sort_keys=False)
+
+    new_status = result.value if result is not None else current_status
+    result_entry = {
+        "queue_id": queue_id,
+        "old_status": current_status,
+        "new_status": new_status,
+    }
+
+    # Build and save decision record
+    record = _build_decision_record(
+        mode="direct",
+        actor=review_input.actor or "human",
+        reason=review_input.reason or "",
+        results=[result_entry],
+    )
+    record_path = save_decision_record(vault_root, record)
+
     return make_envelope(
         "review",
         data={
-            "updated": [],
-            "held": [],
-            "decision_record_path": "",
+            "updated": [result_entry] if result is not None else [],
+            "held": [result_entry] if result is None else [],
+            "decision_record_path": str(record_path),
         },
     )
