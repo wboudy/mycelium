@@ -350,6 +350,105 @@ def cmd_auto(args: argparse.Namespace) -> int:
     return 0 if exit_reason == "complete" else 2
 
 
+# ─── Knowledge Vault command handlers ─────────────────────────────────────
+
+
+def _print_envelope(envelope) -> int:
+    """Print an OutputEnvelope as JSON and return exit code."""
+    import json
+    from dataclasses import asdict
+    print(json.dumps(asdict(envelope), indent=2, default=str))
+    return 0 if envelope.ok else 1
+
+
+def cmd_ingest(args: argparse.Namespace) -> int:
+    """Handle the ingest command."""
+    from mycelium.commands.ingest import execute_ingest
+
+    raw_input: dict = {}
+    if args.url:
+        raw_input["url"] = args.url
+    if args.pdf_path:
+        raw_input["pdf_path"] = args.pdf_path
+    if args.text_bundle:
+        raw_input["text_bundle"] = {"text": args.text_bundle, "ref": "cli-input"}
+    if args.why_saved:
+        raw_input["why_saved"] = args.why_saved
+    if args.tags:
+        raw_input["tags"] = args.tags
+    raw_input["strict"] = args.strict
+    raw_input["dry_run"] = args.dry_run
+
+    return _print_envelope(execute_ingest(raw_input))
+
+
+def cmd_review(args: argparse.Namespace) -> int:
+    """Handle the review command."""
+    from mycelium.commands.review import execute_review
+
+    raw_input: dict = {}
+    if args.queue_id:
+        raw_input["queue_id"] = args.queue_id
+    if args.decision:
+        raw_input["decision"] = args.decision
+    if args.reason:
+        raw_input["reason"] = args.reason
+
+    return _print_envelope(execute_review(raw_input))
+
+
+def cmd_digest(args: argparse.Namespace) -> int:
+    """Handle the digest command."""
+    from mycelium.commands.review_digest import execute_review_digest
+    return _print_envelope(execute_review_digest({}))
+
+
+def cmd_delta(args: argparse.Namespace) -> int:
+    """Handle the delta command."""
+    from mycelium.commands.delta import execute_delta
+
+    raw_input: dict = {}
+    if args.source_id:
+        raw_input["source_id"] = args.source_id
+    if args.delta_report_path:
+        raw_input["delta_report_path"] = args.delta_report_path
+
+    return _print_envelope(execute_delta(raw_input))
+
+
+def cmd_frontier(args: argparse.Namespace) -> int:
+    """Handle the frontier command."""
+    from mycelium.commands.frontier import execute_frontier
+
+    raw_input: dict = {}
+    if args.project:
+        raw_input["project"] = args.project
+    if args.tags:
+        raw_input["tags"] = args.tags
+    if args.limit:
+        raw_input["limit"] = args.limit
+
+    return _print_envelope(execute_frontier(raw_input))
+
+
+def cmd_context(args: argparse.Namespace) -> int:
+    """Handle the context command."""
+    from mycelium.commands.context import execute_context
+
+    raw_input: dict = {}
+    if args.goal:
+        raw_input["goal"] = args.goal
+    if args.project:
+        raw_input["project"] = args.project
+    if args.tags:
+        raw_input["tags"] = args.tags
+    if args.limit:
+        raw_input["limit"] = args.limit
+    raw_input["strict"] = args.strict
+
+    return _print_envelope(execute_context(raw_input))
+
+
 def main() -> int:
     """Main CLI entry point."""
     parser = argparse.ArgumentParser(
@@ -449,7 +548,71 @@ def main() -> int:
         help="Show agent output after each iteration",
     )
     auto_parser.set_defaults(func=cmd_auto)
-    
+
+    # ── Knowledge Vault commands ──────────────────────────────────────────
+
+    # ingest
+    ingest_parser = subparsers.add_parser(
+        "ingest",
+        help="Ingest a URL, PDF, or text bundle into the knowledge vault",
+    )
+    ingest_parser.add_argument("--url", help="URL to ingest")
+    ingest_parser.add_argument("--pdf", dest="pdf_path", help="Path to PDF file")
+    ingest_parser.add_argument("--text", dest="text_bundle", help="Inline text to ingest")
+    ingest_parser.add_argument("--why", dest="why_saved", help="Why this source is being saved")
+    ingest_parser.add_argument("--tags", nargs="*", default=[], help="Tags for the source")
+    ingest_parser.add_argument("--strict", action="store_true", help="Enable strict mode")
+    ingest_parser.add_argument("--dry-run", action="store_true", help="Preview without writing")
+    ingest_parser.set_defaults(func=cmd_ingest)
+
+    # review
+    review_parser = subparsers.add_parser(
+        "review",
+        help="Review and decide on pending queue items",
+    )
+    review_parser.add_argument("--queue-id", help="Specific queue item ID to review")
+    review_parser.add_argument("--decision", choices=["approve", "reject", "hold"], help="Decision")
+    review_parser.add_argument("--reason", help="Reason for decision")
+    review_parser.set_defaults(func=cmd_review)
+
+    # digest
+    digest_parser = subparsers.add_parser(
+        "digest",
+        help="Generate review digest of pending queue items",
+    )
+    digest_parser.set_defaults(func=cmd_digest)
+
+    # delta
+    delta_parser = subparsers.add_parser(
+        "delta",
+        help="Show delta report for a source",
+    )
+    delta_parser.add_argument("--source-id", help="Source ID to show delta for")
+    delta_parser.add_argument("--path", dest="delta_report_path", help="Path to delta report")
+    delta_parser.set_defaults(func=cmd_delta)
+
+    # frontier
+    frontier_parser = subparsers.add_parser(
+        "frontier",
+        help="Show knowledge frontier — topics with gaps or conflicts",
+    )
+    frontier_parser.add_argument("--project", help="Filter by project")
+    frontier_parser.add_argument("--tags", nargs="*", help="Filter by tags")
+    frontier_parser.add_argument("--limit", type=int, help="Max results")
+    frontier_parser.set_defaults(func=cmd_frontier)
+
+    # context
+    context_parser = subparsers.add_parser(
+        "context",
+        help="Build a context pack for a goal",
+    )
+    context_parser.add_argument("goal", nargs="?", help="Goal or question for context pack")
+    context_parser.add_argument("--project", help="Filter by project")
+    context_parser.add_argument("--tags", nargs="*", default=[], help="Filter by tags")
+    context_parser.add_argument("--limit", type=int, help="Token budget limit")
+    context_parser.add_argument("--strict", action="store_true", help="Enable strict mode")
+    context_parser.set_defaults(func=cmd_context)
+
     args = parser.parse_args()
     
     if not args.command:
