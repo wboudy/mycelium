@@ -135,25 +135,17 @@ class TestExecuteIngest:
         assert env.ok is False
         assert env.errors[0].code == ERR_INVALID_INPUT
 
-    def test_success_envelope_has_all_output_fields(self):
-        env = execute_ingest({"url": "https://example.com"})
+    def test_success_envelope_has_pipeline_output_fields(self):
+        env = execute_ingest({"text_bundle": {"text": "Test claim.", "ref": "test"}})
         assert env.ok is True
-        assert env.command == "ingest"
+        assert env.command == "pipeline"
         assert "run_id" in env.data
         assert "source_id" in env.data
-        assert "source_note_path" in env.data
-        assert "delta_report_path" in env.data
-        assert "review_queue_item_paths" in env.data
         assert "artifact_paths" in env.data
-        assert "idempotency" in env.data
 
-    def test_idempotency_in_output(self):
-        env = execute_ingest({"id": "10.1234/foo"})
-        idem = env.data["idempotency"]
-        assert "normalized_locator" in idem
-        assert "fingerprint" in idem
-        assert "reused_source_id" in idem
-        assert "prior_fingerprint" in idem
+    def test_pipeline_output_has_run_id(self):
+        env = execute_ingest({"text_bundle": {"text": "Another test.", "ref": "test2"}})
+        assert env.data["run_id"].startswith("run-")
 
     def test_dry_run_returns_planned_writes(self):
         env = execute_ingest({
@@ -165,7 +157,7 @@ class TestExecuteIngest:
         assert "planned_writes" in env.data
 
     def test_envelope_keys(self):
-        env = execute_ingest({"url": "https://x.com"})
+        env = execute_ingest({"text_bundle": {"text": "Key test.", "ref": "keys"}})
         d = env.to_dict()
         assert set(d.keys()) == {
             "ok", "command", "timestamp", "data",

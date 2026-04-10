@@ -172,20 +172,30 @@ def execute_ingest(raw_input: dict[str, Any]) -> OutputEnvelope:
     if ingest_input.dry_run:
         return dry_run_envelope("ingest", planned_writes=[])
 
-    # Full execution contract structure
-    return make_envelope(
-        "ingest",
-        data={
-            "run_id": "",
-            "source_id": "",
-            "source_note_path": "",
-            "delta_report_path": "",
-            "review_queue_item_paths": [],
-            "artifact_paths": [],
-            "idempotency": IdempotencyRecord(
-                normalized_locator="",
-                fingerprint="",
-                reused_source_id=False,
-            ).to_dict(),
-        },
+    # Build SourceInput from validated IngestInput
+    from pathlib import Path
+
+    from mycelium.pipeline import run_pipeline
+    from mycelium.stages.capture import SourceInput
+
+    source = SourceInput(
+        url=ingest_input.url,
+        pdf_path=ingest_input.pdf_path,
+        text_bundle=ingest_input.text_bundle.get("text") if isinstance(ingest_input.text_bundle, dict) else ingest_input.text_bundle,
+        source_id=ingest_input.id,
     )
+
+    # Determine vault root — use MYCELIUM_VAULT_ROOT env var or default to ./vault
+    import os
+    vault_root_str = os.environ.get("MYCELIUM_VAULT_ROOT", "vault")
+    vault_root = Path(vault_root_str).resolve()
+    if not vault_root.exists():
+        vault_root = None
+
+    pipeline_result, pipeline_envelope = run_pipeline(
+        source,
+        vault_root=vault_root,
+    )
+
+    # Return the pipeline envelope directly — it contains all the data
+    return pipeline_envelope
