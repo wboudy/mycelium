@@ -803,3 +803,157 @@ def search_codebase(
         List of match dicts with 'file', 'line_number', 'content' keys.
     """
     return _search_codebase(pattern, directory, file_pattern, is_regex, case_insensitive, max_results)
+
+
+# =============================================================================
+# Knowledge Vault: Two-Phase Extraction Tools
+# =============================================================================
+
+
+@mcp.tool
+def prepare_extraction(
+    vault_root: str = "vault",
+    run_id: str = "",
+) -> dict[str, Any]:
+    """
+    Prepare source text for agent-driven extraction. Returns the normalized
+    text and schema hints so the LLM can extract claims in-context.
+
+    Call this FIRST, then use the returned text and schema to extract claims,
+    then call submit_extraction with the results.
+
+    Args:
+        vault_root: Path to the vault root directory.
+        run_id: Run ID to load extraction bundle for. If empty, uses most recent.
+
+    Returns:
+        Dict with 'text', 'source_ref', 'schema_hints', and 'run_id'.
+    """
+    from pathlib import Path
+
+    vault = Path(vault_root).resolve()
+    inbox = vault / "Inbox" / "Sources"
+
+    if not inbox.exists():
+        return {"error": "No Inbox/Sources directory found", "vault_root": vault_root}
+
+    # Find the extraction bundle
+    bundles = sorted(inbox.glob("*_extraction.yaml"), key=lambda p: p.stat().st_mtime, reverse=True)
+    if run_id:
+        bundles = [b for b in bundles if run_id in b.name]
+
+    if not bundles:
+        return {"error": "No extraction bundles found", "run_id": run_id}
+
+    bundle_path = bundles[0]
+
+    try:
+        with open(bundle_path) as f:
+            bundle = yaml.safe_load(f) or {}
+    except Exception as e:
+        return {"error": f"Failed to read bundle: {e}"}
+
+    return {
+        "text": bundle.get("normalized_text", ""),
+        "source_ref": bundle.get("source_ref", ""),
+        "source_kind": bundle.get("source_kind", ""),
+        "run_id": bundle.get("run_id", bundle_path.stem.replace("_extraction", "")),
+        "existing_claims": [
+            {
+                "claim_text": c.get("claim_text", ""),
+                "claim_type": c.get("claim_type", ""),
+                "polarity": c.get("polarity", ""),
+            }
+            for c in bundle.get("claims", [])
+        ],
+        "schema_hints": {
+            "claim_types": ["empirical", "definition", "causal", "normative", "procedural"],
+            "polarities": ["supports", "opposes", "neutral"],
+            "example_claim": {
+                "claim_text": "Mycelium networks transfer nutrients between trees",
+                "claim_type": "empirical",
+                "polarity": "supports",
+            },
+            "instructions": (
+                "Extract atomic, falsifiable claims from the text. "
+                "Each claim should be a single assertion that can be evaluated as true or false. "
+                "Assign a claim_type and polarity to each."
+            ),
+        },
+    }
+
+
+@mcp.tool
+def submit_extraction(
+    run_id: str,
+    claims: list[dict[str, str]],
+    vault_root: str = "vault",
+) -> dict[str, Any]:
+    """
+    Submit agent-extracted claims to replace or augment the rule-based extraction.
+    Validates claims against the ExtractionBundle schema and writes to vault.
+
+    Args:
+        run_id: The run ID from prepare_extraction.
+        claims: List of claim dicts, each with 'claim_text', 'claim_type', 'polarity'.
+        vault_root: Path to the vault root directory.
+
+    Returns:
+        Dict with 'success', 'claims_count', 'validation_errors'.
+    """
+    from pathlib import Path
+
+    from mycelium.schema import CLAIM_TYPES, POLARITIES
+
+    vault = Path(vault_root).resolve()
+    bundle_path = vault / "Inbox" / "Sources" / f"{run_id}_extraction.yaml"
+
+    if not bundle_path.exists():
+        return {"success": False, "error": f"Bundle not found: {bundle_path}"}
+
+    # Validate claims
+    errors = []
+    validated_claims = []
+    for i, claim in enumerate(claims):
+        claim_text = claim.get("claim_text", "").strip()
+        claim_type = claim.get("claim_type", "").strip()
+        polarity = claim.get("polarity", "neutral").strip()
+
+        if not claim_text:
+            errors.append(f"Claim {i}: empty claim_text")
+            continue
+        if claim_type and claim_type not in CLAIM_TYPES:
+            errors.append(f"Claim {i}: invalid claim_type '{claim_type}', must be one of {sorted(CLAIM_TYPES)}")
+            continue
+        if polarity not in POLARITIES:
+            errors.append(f"Claim {i}: invalid polarity '{polarity}', must be one of {sorted(POLARITIES)}")
+            continue
+
+        validated_claims.append({
+            "claim_text": claim_text,
+            "claim_type": claim_type or "empirical",
+            "polarity": polarity,
+        })
+
+    if errors:
+        return {"success": False, "claims_count": 0, "validation_errors": errors}
+
+    # Load existing bundle and replace claims
+    try:
+        with open(bundle_path) as f:
+            bundle = yaml.safe_load(f) or {}
+
+        bundle["claims"] = validated_claims
+        bundle["extraction_method"] = "agent"
+
+        with open(bundle_path, "w") as f:
+            yaml.safe_dump(bundle, f, default_flow_style=False, allow_unicode=True, sort_keys=False)
+
+        return {
+            "success": True,
+            "claims_count": len(validated_claims),
+            "bundle_path": str(bundle_path),
+            "validation_errors": [],
+        }
+    except Exception as e:
+        return {"success": False, "error": f"Failed to write bundle: {e}"}
