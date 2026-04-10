@@ -132,6 +132,14 @@ class TestReadProgress:
         result = read_progress(str(temp_dir))
         assert result == {}
 
+    def test_read_non_mapping_root_raises_value_error(self, temp_dir):
+        """read_progress rejects non-mapping YAML roots for contract stability."""
+        progress_file = temp_dir / "progress.yaml"
+        progress_file.write_text("- not-a-mapping\n")
+
+        with pytest.raises(ValueError, match="expected YAML mapping/object root"):
+            read_progress(str(temp_dir))
+
 
 # =============================================================================
 # Tests: update_progress
@@ -190,6 +198,50 @@ class TestUpdateProgress:
         
         assert result["mission_context"]["phase"] == "Testing"
         assert result["mission_context"]["new_field"] == "new_value"
+
+    def test_update_rejects_non_mapping_yaml_root(self, temp_dir):
+        """update_progress rejects progress.yaml roots that are not mappings."""
+        progress_file = temp_dir / "progress.yaml"
+        progress_file.write_text("- bad-root\n")
+
+        with pytest.raises(ValueError, match="expected YAML mapping/object root"):
+            update_progress(
+                str(temp_dir),
+                "mission_context",
+                {"phase": "x"},
+            )
+
+    def test_update_list_section_rejects_non_append_dict_payload(self, sample_progress_yaml):
+        """List sections should not be overwritten by malformed dict payloads."""
+        with pytest.raises(ValueError, match="must include 'append' or list 'replace'"):
+            update_progress(
+                str(sample_progress_yaml.parent),
+                "implementer_log",
+                {"entry": "not-valid"},
+            )
+
+        with open(sample_progress_yaml) as f:
+            saved = yaml.safe_load(f)
+        assert saved["implementer_log"] == []
+
+    def test_update_dict_section_requires_mapping_payload(self, sample_progress_yaml):
+        """Dict sections require mapping payloads for merge semantics."""
+        with pytest.raises(ValueError, match="requires mapping payload"):
+            update_progress(
+                str(sample_progress_yaml.parent),
+                "mission_context",
+                "not-a-dict",
+            )
+
+    def test_update_list_section_allows_list_replace(self, sample_progress_yaml):
+        """List sections can be explicitly replaced with list payloads."""
+        result = update_progress(
+            str(sample_progress_yaml.parent),
+            "implementer_log",
+            [{"step": "replace"}],
+        )
+
+        assert result["implementer_log"] == [{"step": "replace"}]
 
 
 # =============================================================================
@@ -467,6 +519,45 @@ class TestHITLGate:
         (temp_dir / "progress.yaml").write_text("current_agent:\n  nested: value\n")
         assert get_current_agent(str(temp_dir)) is None
 
+    def test_write_requires_approval_with_malformed_nested_implementer(self, sample_progress_yaml, temp_dir):
+        """Malformed nested current_agent payloads should still enforce HITL approval."""
+        with open(sample_progress_yaml) as f:
+            progress = yaml.safe_load(f)
+        progress["current_agent"] = {"current_agent": {"value": "implementer"}}
+        with open(sample_progress_yaml, "w") as f:
+            yaml.dump(progress, f)
+
+        target = temp_dir / "malformed-guard.txt"
+        result = write_file(
+            str(target),
+            "blocked",
+            mission_path=str(sample_progress_yaml.parent),
+            auto_approve=False,
+        )
+
+        assert result["success"] is False
+        assert result["approval_required"] is True
+        assert not target.exists()
+
+    def test_write_requires_approval_when_current_agent_unreadable(self, temp_dir):
+        """Unreadable progress state should fail closed and require approval."""
+        mission_dir = temp_dir / "mission"
+        mission_dir.mkdir()
+        (mission_dir / "progress.yaml").write_text("current_agent: [broken\n")
+
+        target = temp_dir / "unreadable-guard.txt"
+        result = write_file(
+            str(target),
+            "blocked",
+            mission_path=str(mission_dir),
+            auto_approve=False,
+        )
+
+        assert result["success"] is False
+        assert result["approval_required"] is True
+        assert result["reason"] == "unable to determine current_agent"
+        assert not target.exists()
+
 
 # =============================================================================
 # Tests: run_command
@@ -574,6 +665,41 @@ class TestRunCommand:
         for cmd in ("sh", "bash", "zsh", "rm", "curl", "wget", "nc", "ncat", "python", "python3"):
             assert cmd not in COMMAND_ALLOWLIST
 
+    def test_run_requires_approval_with_malformed_list_implementer(self, sample_progress_yaml, temp_dir):
+        """Malformed list-shaped current_agent payloads should still enforce HITL approval."""
+        with open(sample_progress_yaml) as f:
+            progress = yaml.safe_load(f)
+        progress["current_agent"] = [{"unexpected": "shape"}, {"value": "implementer"}]
+        with open(sample_progress_yaml, "w") as f:
+            yaml.dump(progress, f)
+
+        result = run_command(
+            "echo 'should not run'",
+            cwd=str(temp_dir),
+            mission_path=str(sample_progress_yaml.parent),
+            auto_approve=False,
+        )
+
+        assert result["success"] is False
+        assert result["approval_required"] is True
+
+    def test_run_requires_approval_when_current_agent_unreadable(self, temp_dir):
+        """Unreadable progress state should fail closed and require approval."""
+        mission_dir = temp_dir / "mission"
+        mission_dir.mkdir()
+        (mission_dir / "progress.yaml").write_text("current_agent: [broken\n")
+
+        result = run_command(
+            "echo 'should not run'",
+            cwd=str(temp_dir),
+            mission_path=str(mission_dir),
+            auto_approve=False,
+        )
+
+        assert result["success"] is False
+        assert result["approval_required"] is True
+        assert result["reason"] == "unable to determine current_agent"
+
 
 # =============================================================================
 # Tests: search_codebase
@@ -670,6 +796,29 @@ class TestSearchCodebase:
         )
         
         assert len(result) == 5
+
+    def test_search_zero_max_results_returns_empty(self, temp_dir):
+        """max_results <= 0 should return no matches."""
+        (temp_dir / "file.txt").write_text("match this pattern\n")
+
+        result = search_codebase(
+            "match",
+            directory=str(temp_dir),
+            max_results=0,
+        )
+
+        assert result == []
+
+    def test_search_invalid_max_results_raises_value_error(self, temp_dir):
+        """Non-integer max_results values should raise a clear validation error."""
+        (temp_dir / "file.txt").write_text("match this pattern\n")
+
+        with pytest.raises(ValueError, match="max_results must be an integer"):
+            search_codebase(
+                "match",
+                directory=str(temp_dir),
+                max_results="bad",  # type: ignore[arg-type]
+            )
 
 
 # =============================================================================

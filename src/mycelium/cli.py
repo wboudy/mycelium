@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import argparse
 import logging
+import os
 import sys
 from pathlib import Path
 
@@ -21,6 +22,87 @@ logging.basicConfig(
     format="%(levelname)s: %(message)s",
 )
 logger = logging.getLogger(__name__)
+
+_AUTO_APPROVE_TRUE_VALUES = {"1", "true", "yes"}
+
+
+def _normalize_objective(progress: dict) -> str:
+    """Extract a printable objective string from possibly malformed progress payloads."""
+    mission_context = progress.get("mission_context")
+    if not isinstance(mission_context, dict):
+        return ""
+
+    objective = mission_context.get("objective", "")
+    if objective is None:
+        return ""
+    if isinstance(objective, str):
+        return objective.strip()
+    return str(objective).strip()
+
+
+def _parse_env_int(name: str, default: int, minimum: int) -> int:
+    """Parse and validate integer environment values."""
+    raw = os.environ.get(name, "").strip()
+    if not raw:
+        return default
+    try:
+        parsed = int(raw)
+    except ValueError:
+        logger.warning(f"Ignoring invalid {name}={raw!r}; using default {default}")
+        return default
+    if parsed < minimum:
+        logger.warning(f"Ignoring {name}={parsed}; expected >= {minimum}, using default {default}")
+        return default
+    return parsed
+
+
+def _parse_env_float(name: str, default: float, minimum: float) -> float:
+    """Parse and validate float environment values."""
+    raw = os.environ.get(name, "").strip()
+    if not raw:
+        return default
+    try:
+        parsed = float(raw)
+    except ValueError:
+        logger.warning(f"Ignoring invalid {name}={raw!r}; using default {default}")
+        return default
+    if parsed < minimum:
+        logger.warning(f"Ignoring {name}={parsed}; expected >= {minimum}, using default {default}")
+        return default
+    return parsed
+
+
+def _resolve_auto_config(args: argparse.Namespace) -> tuple[int, float, int, bool]:
+    """Resolve and sanitize auto-loop runtime configuration."""
+    max_iterations = (
+        args.max_iterations
+        if args.max_iterations is not None
+        else _parse_env_int("MYCELIUM_MAX_ITERATIONS", default=10, minimum=1)
+    )
+    max_cost = (
+        args.max_cost
+        if args.max_cost is not None
+        else _parse_env_float("MYCELIUM_MAX_COST", default=1.0, minimum=0.0)
+    )
+    max_failures = (
+        args.max_failures
+        if args.max_failures is not None
+        else _parse_env_int("MYCELIUM_MAX_FAILURES", default=3, minimum=1)
+    )
+
+    if max_iterations < 1:
+        logger.warning(f"max_iterations={max_iterations} is invalid; clamping to 1")
+        max_iterations = 1
+    if max_cost < 0:
+        logger.warning(f"max_cost={max_cost} is invalid; clamping to 0.0")
+        max_cost = 0.0
+    if max_failures < 1:
+        logger.warning(f"max_failures={max_failures} is invalid; clamping to 1")
+        max_failures = 1
+
+    env_auto_approve = os.environ.get("MYCELIUM_AUTO_APPROVE", "").strip().lower()
+    auto_approve = bool(args.approve) or env_auto_approve in _AUTO_APPROVE_TRUE_VALUES
+    return max_iterations, max_cost, max_failures, auto_approve
 
 
 def cmd_run(args: argparse.Namespace) -> int:
@@ -67,7 +149,7 @@ def cmd_run(args: argparse.Namespace) -> int:
 
 def cmd_status(args: argparse.Namespace) -> int:
     """Execute the status command with LLM usage."""
-    from mycelium.orchestrator import get_usage_summary, load_progress
+    from mycelium.orchestrator import get_usage_summary, load_progress, normalize_current_agent
     
     mission_path = Path(args.mission_path)
     
@@ -86,8 +168,8 @@ def cmd_status(args: argparse.Namespace) -> int:
     
     # Mission info
     mission_name = mission_path.name if mission_path.is_dir() else mission_path.parent.name
-    current_agent = progress.get("current_agent", "")
-    objective = progress.get("mission_context", {}).get("objective", "")
+    current_agent = normalize_current_agent(progress.get("current_agent", ""))
+    objective = _normalize_objective(progress)
     
     print()
     print(f"📋 Mission: {mission_name}")
@@ -143,9 +225,12 @@ def cmd_status(args: argparse.Namespace) -> int:
 
 def cmd_auto(args: argparse.Namespace) -> int:
     """Execute auto-loop command - runs agents until mission complete or circuit breaker trips."""
-    import os
-    
-    from mycelium.orchestrator import get_usage_summary, load_progress, run_agent
+    from mycelium.orchestrator import (
+        get_usage_summary,
+        load_progress,
+        normalize_current_agent,
+        run_agent,
+    )
     
     mission_path = Path(args.mission_path)
     
@@ -153,11 +238,8 @@ def cmd_auto(args: argparse.Namespace) -> int:
         print(f"❌ Error: Path does not exist: {mission_path}", file=sys.stderr)
         return 1
     
-    # Configuration from args/env — use `is not None` to allow explicit 0 values
-    max_iterations = args.max_iterations if args.max_iterations is not None else int(os.environ.get("MYCELIUM_MAX_ITERATIONS", "10"))
-    max_cost = args.max_cost if args.max_cost is not None else float(os.environ.get("MYCELIUM_MAX_COST", "1.0"))
-    max_failures = args.max_failures if args.max_failures is not None else int(os.environ.get("MYCELIUM_MAX_FAILURES", "3"))
-    auto_approve = args.approve or os.environ.get("MYCELIUM_AUTO_APPROVE", "").lower() in ("1", "true", "yes")
+    # Configuration from args/env
+    max_iterations, max_cost, max_failures, auto_approve = _resolve_auto_config(args)
     
     print(f"🔄 Auto mode for mission: {mission_path}")
     print(f"   Max iterations: {max_iterations}")
@@ -180,18 +262,7 @@ def cmd_auto(args: argparse.Namespace) -> int:
             print(f"❌ Error loading progress: {e}", file=sys.stderr)
             return 1
         
-        raw_agent = progress.get("current_agent", "")
-        if isinstance(raw_agent, dict):
-            # Handle case where LLM wrote a nested dict or object
-            # Attempt to find the value or just convert to string
-            # Common failure: current_agent: { current_agent: "implementer" }
-            if "current_agent" in raw_agent:
-                current_agent = str(raw_agent["current_agent"]).strip()
-            else:
-                # Just take the first value or stringify
-                current_agent = str(raw_agent).strip()
-        else:
-            current_agent = str(raw_agent).strip()
+        current_agent = normalize_current_agent(progress.get("current_agent", ""))
         
         # Check completion
         if not current_agent:
@@ -394,4 +465,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     sys.exit(main())
-

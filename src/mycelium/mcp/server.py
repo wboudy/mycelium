@@ -72,13 +72,47 @@ def _safe_resolve(user_path: str) -> Path:
     )
 
 
-def _get_current_agent(mission_path: str) -> str | None:
-    """Get current_agent from progress.yaml.
+def _normalize_agent_value(raw_agent: Any) -> str:
+    """Normalize current_agent values that may be malformed by LLM writes."""
+    def _normalize(value: Any, allow_fallback_stringify: bool) -> str:
+        if value is None:
+            return ""
 
-    Returns:
-        Normalized (lowercased, stripped) agent name, or None if the
-        agent cannot be determined (missing file, parse error, etc.).
-    """
+        if isinstance(value, dict):
+            saw_agent_key = False
+            for key in ("current_agent", "value", "agent"):
+                if key in value:
+                    saw_agent_key = True
+                    normalized = _normalize(value[key], allow_fallback_stringify=False)
+                    if normalized:
+                        return normalized
+            if saw_agent_key:
+                return ""
+            if allow_fallback_stringify:
+                return str(value).strip().lower()
+            return ""
+
+        if isinstance(value, (list, tuple)):
+            for item in value:
+                normalized = _normalize(item, allow_fallback_stringify=False)
+                if normalized:
+                    return normalized
+            return ""
+
+        if isinstance(value, set):
+            for item in sorted(value, key=str):
+                normalized = _normalize(item, allow_fallback_stringify=False)
+                if normalized:
+                    return normalized
+            return ""
+
+        return str(value).strip().lower()
+
+    return _normalize(raw_agent, allow_fallback_stringify=True)
+
+
+def _get_current_agent(mission_path: str) -> str | None:
+    """Get normalized current_agent from progress.yaml, or None if unreadable."""
     progress_file = Path(mission_path)
     if progress_file.is_dir():
         progress_file = progress_file / "progress.yaml"
@@ -89,10 +123,9 @@ def _get_current_agent(mission_path: str) -> str | None:
     try:
         with open(progress_file) as f:
             progress = yaml.safe_load(f) or {}
-        raw = progress.get("current_agent", "")
-        if not isinstance(raw, str) or not raw.strip():
+        if not isinstance(progress, dict):
             return None
-        return raw.strip().lower()
+        return _normalize_agent_value(progress.get("current_agent", ""))
     except Exception:
         return None
 
@@ -170,7 +203,7 @@ def _read_progress(mission_path: str) -> dict[str, Any]:
         raise ValueError(f"Failed to parse YAML: {e}")
 
 
-def _update_progress(mission_path: str, section: str, data: dict[str, Any]) -> dict[str, Any]:
+def _update_progress(mission_path: str, section: str, data: Any) -> dict[str, Any]:
     """
     Update a specific section of a mission's progress.yaml file.
 
@@ -230,6 +263,9 @@ def _update_progress(mission_path: str, section: str, data: dict[str, Any]) -> d
         except yaml.YAMLError as e:
             raise ValueError(f"Failed to parse existing YAML: {e}")
 
+        if not isinstance(progress, dict):
+            raise ValueError("Invalid progress.yaml format: expected YAML mapping/object root")
+
         # Update the section
         if section == "current_agent":
             # Special case: current_agent is a string, not a dict
@@ -237,28 +273,42 @@ def _update_progress(mission_path: str, section: str, data: dict[str, Any]) -> d
             val = data.get("value", data) if isinstance(data, dict) else data
 
             if isinstance(val, dict):
-                # If still a dict, try to unwrap 'current_agent' key if it exists
-                # This handles: current_agent: { current_agent: "implementer" }
                 if "current_agent" in val:
                     val = val["current_agent"]
                 elif "value" in val:
                     val = val["value"]
-                # If strictly a dict with other keys, convert to str to allow human fixing, but warn
                 if isinstance(val, dict):
                     val = str(val)
 
             progress["current_agent"] = str(val).strip()
 
-        elif isinstance(progress.get(section), list) and isinstance(data, dict) and "append" in data:
-            # Append to list sections (like implementer_log, verifier_report)
-            progress[section].append(data["append"])
+        elif isinstance(progress.get(section), list):
+            # List sections support append operations or explicit list replacement.
+            if isinstance(data, dict):
+                if "append" in data:
+                    progress[section].append(data["append"])
+                elif "replace" in data and isinstance(data["replace"], list):
+                    progress[section] = data["replace"]
+                else:
+                    raise ValueError(
+                        f"List section '{section}' update must include 'append' or list 'replace'"
+                    )
+            elif isinstance(data, list):
+                progress[section] = data
+            else:
+                raise ValueError(
+                    f"List section '{section}' update requires dict/list payload, got {type(data).__name__}"
+                )
 
         elif isinstance(progress.get(section), dict):
             # Merge dict sections
-            # Validation: Prevent recursive wrapping (e.g. scientist_plan: { scientist_plan: ... })
             if isinstance(data, dict) and section in data and isinstance(data[section], dict):
-                # The LLM wrapped the update in the section key name. Unwrap it.
                 data = data[section]
+
+            if not isinstance(data, dict):
+                raise ValueError(
+                    f"Dict section '{section}' update requires mapping payload, got {type(data).__name__}"
+                )
 
             progress[section].update(data)
 
@@ -546,6 +596,14 @@ def _search_codebase(
     Returns:
         List of match dicts with 'file', 'line_number', 'content' keys.
     """
+    try:
+        result_limit = int(max_results)
+    except (TypeError, ValueError):
+        raise ValueError("max_results must be an integer")
+
+    if result_limit <= 0:
+        return []
+
     path = _safe_resolve(directory)
 
     if not path.exists():
@@ -605,7 +663,7 @@ def _search_codebase(
                     "content": line.strip(),
                 })
                 
-                if len(results) >= max_results:
+                if len(results) >= result_limit:
                     return results
     
     return results

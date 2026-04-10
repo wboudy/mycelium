@@ -10,7 +10,9 @@ Supports Anthropic, OpenAI, and Google via environment variables:
 
 from __future__ import annotations
 
+import json
 import logging
+import math
 import os
 import time
 from dataclasses import dataclass, field
@@ -125,6 +127,101 @@ def _verify_api_keys() -> list[str]:
     return available
 
 
+def _coerce_non_negative_int(value: Any) -> int:
+    """Coerce int/float-like values to non-negative ints."""
+    if value is None or isinstance(value, bool):
+        return 0
+
+    if isinstance(value, (int, float)):
+        parsed = float(value)
+    elif isinstance(value, str):
+        stripped = value.strip()
+        if not stripped:
+            return 0
+        try:
+            parsed = float(stripped)
+        except ValueError:
+            return 0
+    else:
+        return 0
+
+    if not math.isfinite(parsed) or parsed < 0:
+        return 0
+    return int(parsed)
+
+
+def _normalize_tool_call(raw_tool_call: Any, fallback_index: int) -> dict[str, Any] | None:
+    """Normalize a single provider tool-call payload."""
+    if isinstance(raw_tool_call, dict):
+        raw_id = raw_tool_call.get("id")
+        raw_function = raw_tool_call.get("function")
+    else:
+        raw_id = getattr(raw_tool_call, "id", None)
+        raw_function = getattr(raw_tool_call, "function", None)
+
+    if isinstance(raw_function, dict):
+        raw_name = raw_function.get("name")
+        raw_arguments = raw_function.get("arguments")
+    else:
+        raw_name = getattr(raw_function, "name", None)
+        raw_arguments = getattr(raw_function, "arguments", None)
+
+    if not isinstance(raw_name, str):
+        return None
+    name = raw_name.strip()
+    if not name:
+        return None
+
+    call_id = str(raw_id).strip() if raw_id is not None else ""
+    if not call_id:
+        call_id = f"tool_call_{fallback_index}"
+
+    if raw_arguments is None:
+        arguments = "{}"
+    elif isinstance(raw_arguments, str):
+        arguments = raw_arguments
+    else:
+        try:
+            arguments = json.dumps(raw_arguments)
+        except (TypeError, ValueError):
+            arguments = str(raw_arguments)
+
+    return {"id": call_id, "name": name, "arguments": arguments}
+
+
+def _normalize_message_content(raw_content: Any) -> str:
+    """Normalize provider message content to plain text."""
+    if raw_content is None:
+        return ""
+    if isinstance(raw_content, str):
+        return raw_content
+
+    if isinstance(raw_content, list):
+        normalized_parts: list[str] = []
+        for part in raw_content:
+            text_value: str | None = None
+            if isinstance(part, dict):
+                if isinstance(part.get("text"), str):
+                    text_value = part["text"]
+                elif isinstance(part.get("content"), str):
+                    text_value = part["content"]
+            else:
+                candidate_text = getattr(part, "text", None)
+                if isinstance(candidate_text, str):
+                    text_value = candidate_text
+
+            if text_value is None:
+                part_text = str(part).strip()
+                if part_text:
+                    normalized_parts.append(part_text)
+            elif text_value.strip():
+                normalized_parts.append(text_value.strip())
+
+        return "\n".join(normalized_parts).strip()
+
+    return str(raw_content)
+
+
 def complete(
     messages: list[dict[str, Any]],
     model: str = DEFAULT_MODEL,
@@ -223,29 +320,45 @@ def complete(
             
             # Extract response content
             message = response.choices[0].message
-            content = message.content or ""
+            content = _normalize_message_content(getattr(message, "content", ""))
             
             # Extract tool calls if present
             extracted_tool_calls = None
-            if hasattr(message, "tool_calls") and message.tool_calls:
-                extracted_tool_calls = []
-                for tc in message.tool_calls:
-                    tool_call_data = {
-                        "id": tc.id,
-                        "name": tc.function.name,
-                        "arguments": tc.function.arguments,  # JSON string
-                    }
-                    extracted_tool_calls.append(tool_call_data)
-                logger.info(f"LLM returned {len(extracted_tool_calls)} tool call(s)")
+            raw_tool_calls = getattr(message, "tool_calls", None)
+            if raw_tool_calls:
+                if isinstance(raw_tool_calls, list):
+                    tool_call_items = raw_tool_calls
+                else:
+                    tool_call_items = [raw_tool_calls]
+
+                normalized_tool_calls = []
+                for idx, raw_tool_call in enumerate(tool_call_items, start=1):
+                    normalized = _normalize_tool_call(raw_tool_call, idx)
+                    if normalized:
+                        normalized_tool_calls.append(normalized)
+                    else:
+                        logger.warning(f"Skipping malformed tool call payload: {raw_tool_call!r}")
+
+                if normalized_tool_calls:
+                    extracted_tool_calls = normalized_tool_calls
+                    logger.info(f"LLM returned {len(extracted_tool_calls)} tool call(s)")
             
             # Extract usage metadata
-            usage_data = response.usage
-            prompt_tokens = getattr(usage_data, "prompt_tokens", 0) or 0
-            completion_tokens = getattr(usage_data, "completion_tokens", 0) or 0
-            total_tokens = prompt_tokens + completion_tokens
+            usage_data = getattr(response, "usage", None)
+            prompt_tokens = _coerce_non_negative_int(getattr(usage_data, "prompt_tokens", 0))
+            completion_tokens = _coerce_non_negative_int(getattr(usage_data, "completion_tokens", 0))
+            reported_total_tokens = _coerce_non_negative_int(getattr(usage_data, "total_tokens", 0))
+            total_tokens = reported_total_tokens or (prompt_tokens + completion_tokens)
             
             # Calculate cost
-            cost_usd = _calculate_cost(model, prompt_tokens, completion_tokens)
+            try:
+                cost_usd = _calculate_cost(model, prompt_tokens, completion_tokens)
+            except Exception as e:
+                logger.warning(f"Cost calculation failed for {model}: {e}")
+                cost_usd = 0.0
+
+            if not isinstance(cost_usd, (int, float)) or not math.isfinite(cost_usd) or cost_usd < 0:
+                cost_usd = 0.0
             
             usage = UsageMetadata(
                 prompt_tokens=prompt_tokens,

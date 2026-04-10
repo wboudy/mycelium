@@ -423,11 +423,7 @@ Required keys:
 - AC-NAM-001-2: Validator rejects `id` strings outside the allowed patterns.
 - AC-NAM-001-3: Machine-generated notes default to the hybrid `<slug>--h-<12hex>` pattern unless an explicit migration compatibility mode is enabled.
 
-**Resolution (TODO-Q-NAM-1):** Migration compatibility mode is explicit and disabled by default.
-- Config key: `naming.compat_mode` with values `strict` (default) or `legacy_slug_generation`.
-- In `strict`, machine-generated notes MUST use hybrid `<slug>--h-<12hex>`.
-- In `legacy_slug_generation`, machine-generated notes MAY emit slug-only ids only when no filename/id collision exists; on collision they MUST fall back to hybrid form.
-- This mode does not relax NAM-001 validation or filename/id equality rules.
+**TODO-Q-NAM-1:** Define the migration compatibility mode behavior and its activation mechanism (e.g., allowing manual slug-only IDs for older notes) without breaking NAM-001 validation.
 
 #### 4.3.2 Wikilink resolution
 **Requirement LNK-001:** In Strict Mode, all Obsidian Wikilinks in Canonical Scope MUST resolve to an existing Note path.
@@ -642,11 +638,7 @@ Errors:
 - AC-CMD-RDG-001-2: Packet decisions support exactly `approve_all`, `approve_selected`, `hold`, and `reject` (SCH-009).
 - AC-CMD-RDG-001-3: Digest generation is deterministic for the same snapshot in Deterministic Test Mode (§13.4).
 
-**Resolution (TODO-Q-RDG-1):**
-- The authoritative invocation surface is the `review_digest` command/API contract itself.
-- Invocation may be performed manually, by external scheduler, or via client integration, but all paths MUST call the same command semantics and emit the same artifact schemas.
-- A built-in scheduler is not required by this spec.
-- Invocations MUST record actor provenance; recommended actor format is `user:<id>`, `scheduler:<id>`, or `client:<id>`.
+**TODO-Q-RDG-1:** Define whether `review_digest` is invoked manually, via external scheduler, or via client integration; this spec does not require a built-in scheduler.
 
 #### 5.2.5 `graduate`
 Input:
@@ -750,27 +742,7 @@ For tie-breaking, `last_reviewed_at` is sourced from Note frontmatter when prese
 - AC-CMD-FRN-002-2: Each reading target includes `factors` with all five factor components and values in `[0..1]`.
 - AC-CMD-FRN-002-3: If two targets have equal score, tie-break ordering follows the defined deterministic order and fallback behavior.
 
-**Resolution (TODO-Q-FRN-1):** Frontier factor derivations are deterministic and use the **Option B** council choice (hardened deterministic factors).
-
-Let:
-- `ref_ts` = command reference timestamp (fixed in Deterministic Test Mode).
-- `review_ts(T)` = `last_reviewed_at` when present, otherwise `updated`.
-- `contradict_count(T)` = number of contradiction/conflict records citing `T`.
-- `support_count(T)` = number of distinct supporting `source_id` values linked to `T`.
-- `linked_delta_novelty_30d(T)` = `novelty_score` values from Delta Reports linked to `T` with `created_at >= ref_ts - 30 days`.
-- `p75(x)` = deterministic nearest-rank 75th percentile over sorted values `x`; if `x` is empty, `0.0`.
-
-Derivations:
-- `conflict_factor(T) = clamp01(contradict_count(T) / max(1, contradict_count(T) + support_count(T)))`
-- `support_gap(T) = 1.0 - clamp01(support_count(T) / 3.0)`
-- `goal_relevance(T)`:
-  - If both `project` and `tags` inputs are omitted: `0.5`
-  - Otherwise:
-    - `project_match = 1.0` if `project` provided and `T.project == project`; `0.0` if `project` provided and not equal; `0.5` if `project` omitted or `T.project` absent
-    - `tag_overlap = |T.tags ∩ input.tags| / max(1, |input.tags|)`; if `input.tags` omitted, `tag_overlap = 0.5`
-    - `goal_relevance(T) = clamp01(0.6*project_match + 0.4*tag_overlap)`
-- `novelty(T) = clamp01(p75(linked_delta_novelty_30d(T)))`
-- `staleness(T) = clamp01(days_between(ref_ts, review_ts(T)) / 45.0)`
+**TODO-Q-FRN-1:** Define deterministic derivations for `conflict_factor`, `support_gap`, `goal_relevance`, `novelty`, and `staleness` from vault data (beyond the weighted aggregation and tie-break rules defined here).
 
 #### 5.2.8 `connect`, `trace`, `ideas`
 These commands are part of later milestones and may be implemented after MVP2.
@@ -959,12 +931,7 @@ MVP1 deterministic factor definitions (to ensure testability without external re
 - AC-CONF-001-1: Re-running confidence calculation for the same fixture yields identical values.
 - AC-CONF-001-2: Claims missing required provenance fields are not emitted as valid claims in the Extraction Bundle; if present in intermediate data, their computed confidence is `<= 0.4` and they remain routed to human review paths (not auto-approved).
 
-**Resolution (TODO-Q-CONF-1):** MVP2 calibration for `source_reliability` is defined and user-configurable.
-- Optional config file: `Config/source_reliability.yaml`
-- Schema: map of domain/publisher key -> numeric reliability in `[0..1]`, plus optional `"default"` key.
-- Lookup order: exact key match, parent-domain fallback, then `"default"`.
-- If config is absent, `"default"` is `0.5`.
-- Values are clamped to `[0..1]`; invalid values fail Strict Mode with `ERR_SCHEMA_VALIDATION` and are warnings in non-Strict mode.
+**TODO-Q-CONF-1:** Define any MVP2+ calibration for `source_reliability` and whether it is user-configurable.
 
 ## 8. Review Queue and Promotion
 ### 8.1 Review queue generation
@@ -988,11 +955,7 @@ Workflow requirements (packet semantics):
 - AC-REV-001A-2: Applying packet actions through `review` and `graduate --from_digest` yields deterministic queue and promotion outcomes for a deterministic fixture.
 - AC-REV-001A-3: Hold decisions resurface after the configured hold TTL (decision: 14 days).
 
-**Resolution (TODO-Q-REV-1):**
-- Hold policy is stored in `Config/review_policy.yaml` under `hold_ttl_days` (default `14`).
-- Every `hold` decision MUST write explicit `hold_until` into both packet decision data (SCH-009) and review decision results (SCH-010).
-- Resurfacing is deterministic at `review_digest` generation time: a held queue item is re-included only when `hold_until <= digest_date`.
-- No built-in scheduler is required; resurfacing happens whenever digest generation runs.
+**TODO-Q-REV-1:** Specify where hold TTL configuration is stored and how “resurface” is implemented without requiring a built-in scheduler.
 
 ### 8.1.2 Auto-approval lane policy
 **Requirement REV-001B:** The Auto-Approval Lane MUST be constrained to low-risk, non-semantic updates.
@@ -1043,13 +1006,7 @@ Transition rules:
 - AC-REV-004-1: In a fixture applying Promotions for two different Source packets in a single run, the resulting git history includes exactly two new commits.
 - AC-REV-004-2: In a fixture applying Promotions for one Source packet, the resulting git history includes exactly one new commit whose diff contains only changes attributable to that packet’s promoted items.
 
-**Resolution (TODO-Q-REV-2):**
-- Git Mode configuration is stored in `Config/review_policy.yaml` at `git_mode.enabled` (default `false`).
-- When enabled, `graduate --from_digest` MUST produce exactly one commit per Source packet apply batch (REV-004).
-- Minimum commit subject schema:
-  - `graduate packet=<packet_id> source=<source_id> run_ids=<sorted_csv_run_ids>`
-- Commit body MUST include applied `queue_id` values in deterministic lexical order.
-- If Git Mode is enabled and commit/write fails, promotion apply MUST fail atomically with no partial canonical mutations.
+**TODO-Q-REV-2:** Define Git Mode enablement/configuration and minimum commit message conventions (e.g., including `source_id` and/or `run_id`) without introducing repo-specific assumptions.
 
 ## 9. Security, Privacy, and Audit
 ### 9.1 Audit logging
@@ -1126,16 +1083,7 @@ Default sanitization policy (when enabled):
 - AC-SEC-004-1: A fixture payload containing an API key-like token and an email address results in an `egress_attempted`/`egress_completed` audit event that includes `redaction_summary` indicating at least those two redaction categories were applied.
 - AC-SEC-004-2: If the sanitization step fails to parse or redact (induced failure fixture), the Egress attempt is blocked and recorded as `egress_blocked` with a failure reason.
 
-**Resolution (TODO-Q-SEC-1):**
-- Egress policy state is stored in `Config/egress_policy.yaml` with keys:
-  - `mode: report_only|enforce`
-  - `burn_in_started_at: ISO-8601 UTC`
-  - `last_transition_at: ISO-8601 UTC|null`
-  - `transitioned_by: string|null`
-  - `transition_reason: string|null`
-- Burn-in elapsed days are computed from `burn_in_started_at` at evaluation time; no scheduler is required.
-- Transition `report_only -> enforce` is explicit only (command or config change), and MUST emit an audit event per SEC-003.
-- Passing 14 days does not auto-flip mode; explicit transition remains required.
+**TODO-Q-SEC-1:** Define how the 14-day burn-in window is tracked (without requiring a built-in scheduler) and how/where Egress mode is stored/configured.
 
 ## 10. Failure Modes and Recovery
 ### 10.1 Explicit failures and recoverability
@@ -1216,55 +1164,8 @@ Targets:
 ### 12.4 MVP3 (future)
 MVP3 may include advanced triage (“watery vs dense”), `/connect`, `/trace`, `/ideas`, and ranking improvements.
 
-**Resolution (TODO-Q-MVP3-1):** MVP3 triage/skip policy uses the **Option C** council choice (governed deterministic lifecycle with hysteresis).
-- `triage_score = clamp01(0.45*conflict_factor + 0.25*support_gap + 0.20*novelty + 0.10*staleness)`
-- Buckets:
-  - `dense` if `triage_score >= 0.67`
-  - `mixed` if `0.34 <= triage_score < 0.67`
-  - `watery` if `triage_score < 0.34`
-- Hysteresis:
-  - `dense -> mixed` only after 2 consecutive evaluations with `triage_score < 0.62`
-  - `watery -> mixed` on first evaluation with `triage_score >= 0.42`
-- Skip-list entry requires all:
-  - 3 consecutive `watery` evaluations
-  - `conflict_factor == 0`
-  - zero open-question references
-  - target not manually pinned
-  - target age `>= 14 days`
-- Skip-list metadata per target:
-  - `skip_since`, `skip_reason`, `next_review_at`
-  - default `next_review_at = skip_since + 30 days`
-- Skip-list removal on first of:
-  - any new conflict reference
-  - any new open-question reference
-  - manual unskip
-  - `next_review_at` reached (auto-resurface and re-evaluate)
-- Safety cap: skip-list may include at most 20% of active targets in a snapshot.
-- Skipped targets remain retrievable with `include_skip=true`.
-
-**Resolution (TODO-Q-MVP3-2):** MVP3 graph analysis uses the **Option C** council choice (two-tier model with stronger hub quality + dual-size perf envelopes).
-- Graph substrate:
-  - canonical wikilink graph over Canonical Scope notes
-  - directed edges for traversal; undirected projection for articulation/bridge analysis
-- Core algorithms (required baseline):
-  - Hub score: `hub_score = 0.6*norm(in_degree) + 0.4*norm(page_rank)`
-  - Bridges: Tarjan articulation points + bridge edges on undirected projection (`O(V+E)`)
-  - Tie-break ordering: lexical by stable target id
-- Optional advanced mode (`--advanced-graph`):
-  - approximate betweenness for top-N candidates
-  - advanced-mode metrics are non-blocking for baseline SLA gates unless explicitly enabled
-- Minimum outputs:
-  - `hubs`, `articulation_points`, `bridge_edges`, `components_summary`
-  - hub metrics include `in_degree`, `page_rank`, `hub_score`
-- Performance targets:
-  - Medium fixture (`~5k` nodes / `~20k` edges):
-    - graph build p95 `<= 2.5s`
-    - core analysis p95 `<= 4.0s`
-    - end-to-end command p95 `<= 6.0s`
-  - Large fixture (`~10k` nodes / `~50k` edges):
-    - graph build p95 `<= 6.0s`
-    - core analysis p95 `<= 9.0s`
-    - end-to-end command p95 `<= 14.0s`
+**TODO-Q-MVP3-1:** Define the triage scoring model and bucket thresholds for watery vs dense and skip-list behavior.  
+**TODO-Q-MVP3-2:** Define the minimum viable graph algorithms for hub/bridge detection and their performance targets.
 
 ## 13. Test Plan
 This section specifies required testing layers and fixture strategy.
@@ -1367,7 +1268,7 @@ Minimum regression cases:
 ## 15. Decision Record (Resolved for v1.1)
 - Q1 (Note ID strategy): Use hybrid `<slug>--h-<12hex>` for machine-generated notes; migration compatibility may allow manual slug-only notes.
 - Q2 (provenance locator granularity): URL/PDF require structured locator + `snippet_hash`; other source kinds use `raw_locator` in MVP1.
-- Q3 (confidence rubric): deterministic advisory rubric enabled in MVP1 (see CONF-001); MVP2 adds optional user-configurable `source_reliability` calibration.
+- Q3 (confidence rubric): deterministic advisory rubric enabled in MVP1 (see CONF-001), with stricter domain calibration deferred.
 - Q4 (authoritative review UX): command/API is authoritative; CLI and Obsidian plugin are client surfaces.
 - Q5 (egress policy): staged `report_only (14 days) -> enforce default-deny allowlist` with fail-closed redaction.
 - Q6 (performance targets): fixed numeric p95 thresholds defined in PERF-001.
@@ -1377,7 +1278,5 @@ Minimum regression cases:
 - Q10 (apply commit granularity): one commit per Source packet apply batch.
 - Q11 (hold aging policy): hold TTL is 14 days, then item resurfaces in nightly digest.
 - Q12 (contradictions): always require human review with side-by-side evidence; never auto-approved.
-- Q13 (frontier scoring): deterministic weighted formula in CMD-FRN-002 with Option B derivations (ratio-based conflict/support, p75 novelty over 30d lookback, 45d staleness normalization).
+- Q13 (frontier scoring): deterministic weighted score formula in CMD-FRN-002.
 - Q14 (create-vs-update threshold): similarity thresholds and merge/create ambiguity band defined in DED-003.
-- Q15 (MVP3 triage): Option C chosen with governed skip-list lifecycle, hysteresis, and skip-cap safety controls.
-- Q16 (MVP3 graph analysis): Option C chosen with two-tier analytics (hybrid hub score + Tarjan core, optional advanced mode) and dual-size performance targets.

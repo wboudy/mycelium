@@ -12,6 +12,7 @@ Manages the execution of agents by:
 from __future__ import annotations
 
 import logging
+import math
 import os
 import sys
 from datetime import datetime, timezone
@@ -20,7 +21,7 @@ from typing import Any
 
 import yaml
 
-from mycelium.llm import CompletionResponse, complete
+from mycelium.llm import DEFAULT_MODEL, CompletionResponse, complete
 
 logger = logging.getLogger(__name__)
 
@@ -29,6 +30,11 @@ VALID_AGENTS = {"scientist", "implementer", "verifier", "maintainer"}
 
 # Agents that require HITL approval before execution
 REQUIRES_APPROVAL = {"implementer"}
+
+# Routing labels and model defaults for bug-interrupt handoffs.
+DEEP_MODEL_LABEL = "model:deep"
+DEEP_MODEL_ENV_KEYS = ("MYCELIUM_MODEL_DEEP", "MYCELIUM_DEEP_MODEL")
+DEFAULT_DEEP_MODEL = "openai/gpt-5"
 
 
 def find_repo_root(start_path: Path | None = None) -> Path | None:
@@ -64,6 +70,7 @@ def load_progress(mission_path: Path) -> dict[str, Any]:
     Raises:
         FileNotFoundError: If progress.yaml doesn't exist.
         yaml.YAMLError: If YAML parsing fails.
+        ValueError: If YAML root is not a mapping/object.
     """
     if mission_path.suffix == ".yaml":
         progress_file = mission_path
@@ -74,10 +81,18 @@ def load_progress(mission_path: Path) -> dict[str, Any]:
         raise FileNotFoundError(f"progress.yaml not found at: {progress_file}")
     
     with open(progress_file) as f:
-        data = yaml.safe_load(f)
-    if data is None:
+        loaded = yaml.safe_load(f)
+
+    # Empty YAML is valid; treat it as an empty progress object.
+    if loaded is None:
         return {}
-    return data
+
+    if not isinstance(loaded, dict):
+        raise ValueError(
+            f"Invalid progress.yaml format at {progress_file}: expected YAML mapping/object root"
+        )
+
+    return loaded
 
 
 def save_progress(mission_path: Path, progress: dict[str, Any]) -> None:
@@ -184,6 +199,158 @@ Current agent: {progress.get('current_agent', agent_role)}
     ]
 
 
+def _coerce_labels(raw_labels: Any) -> set[str]:
+    """Normalize various label shapes (string/list/dict) into a set of strings."""
+    labels: set[str] = set()
+
+    if isinstance(raw_labels, str):
+        for label in raw_labels.replace(",", " ").split():
+            normalized = label.strip().lower()
+            if normalized:
+                labels.add(normalized)
+        return labels
+
+    if isinstance(raw_labels, (list, tuple, set)):
+        for item in raw_labels:
+            labels.update(_coerce_labels(item))
+        return labels
+
+    if isinstance(raw_labels, dict):
+        labels.update(_coerce_labels(raw_labels.get("labels")))
+        labels.update(_coerce_labels(raw_labels.get("label")))
+
+    return labels
+
+
+def extract_routing_labels(progress: dict[str, Any]) -> set[str]:
+    """
+    Extract bead-routing labels from common progress.yaml sections.
+
+    This keeps routing resilient to minor schema differences across skills.
+    """
+    labels: set[str] = set()
+    labels.update(_coerce_labels(progress.get("labels")))
+
+    mission_context = progress.get("mission_context")
+    if isinstance(mission_context, dict):
+        labels.update(_coerce_labels(mission_context.get("labels")))
+        labels.update(_coerce_labels(mission_context.get("bead_labels")))
+
+    for section_name in ("bead", "issue", "handoff", "orchestrator", "routing"):
+        section = progress.get(section_name)
+        if isinstance(section, dict):
+            labels.update(_coerce_labels(section.get("labels")))
+            labels.update(_coerce_labels(section.get("label")))
+
+    return labels
+
+
+def resolve_model_for_run(progress: dict[str, Any], model_override: str | None) -> tuple[str, str]:
+    """
+    Resolve which model to use for this run.
+
+    Precedence:
+    1. Explicit CLI/API override
+    2. model:deep routing for bug beads
+    3. Standard MYCELIUM_MODEL/default model
+    """
+    explicit_model = (model_override or "").strip()
+    if explicit_model:
+        return explicit_model, "override"
+
+    routing_labels = extract_routing_labels(progress)
+    if DEEP_MODEL_LABEL in routing_labels:
+        for env_key in DEEP_MODEL_ENV_KEYS:
+            configured = os.environ.get(env_key, "").strip()
+            if configured:
+                return configured, f"{DEEP_MODEL_LABEL}:{env_key}"
+        return DEFAULT_DEEP_MODEL, f"{DEEP_MODEL_LABEL}:default"
+
+    default_model = os.environ.get("MYCELIUM_MODEL", "").strip()
+    if default_model:
+        return default_model, "default"
+
+    return DEFAULT_MODEL, "default"
+
+
+def normalize_current_agent(raw_agent: Any) -> str:
+    """Normalize current_agent values that may be malformed by LLM writes."""
+    def _normalize(value: Any, allow_fallback_stringify: bool) -> str:
+        if value is None:
+            return ""
+
+        if isinstance(value, dict):
+            saw_agent_key = False
+            for key in ("current_agent", "value", "agent"):
+                if key in value:
+                    saw_agent_key = True
+                    normalized = _normalize(value[key], allow_fallback_stringify=False)
+                    if normalized:
+                        return normalized
+            if saw_agent_key:
+                return ""
+            if allow_fallback_stringify:
+                return str(value).strip().lower()
+            return ""
+
+        if isinstance(value, (list, tuple)):
+            for item in value:
+                normalized = _normalize(item, allow_fallback_stringify=False)
+                if normalized:
+                    return normalized
+            return ""
+
+        if isinstance(value, set):
+            for item in sorted(value, key=str):
+                normalized = _normalize(item, allow_fallback_stringify=False)
+                if normalized:
+                    return normalized
+            return ""
+
+        return str(value).strip().lower()
+
+    return _normalize(raw_agent, allow_fallback_stringify=True)
+
+
+def _parse_numeric(value: Any) -> float | None:
+    """Parse int/float-like inputs into finite floats."""
+    if value is None or isinstance(value, bool):
+        return None
+
+    if isinstance(value, (int, float)):
+        parsed = float(value)
+    elif isinstance(value, str):
+        stripped = value.strip()
+        if not stripped:
+            return None
+        try:
+            parsed = float(stripped)
+        except ValueError:
+            return None
+    else:
+        return None
+
+    if not math.isfinite(parsed):
+        return None
+    return parsed
+
+
+def _coerce_non_negative_int(value: Any) -> int:
+    """Parse to non-negative int with invalid/negative values clamped to 0."""
+    parsed = _parse_numeric(value)
+    if parsed is None or parsed < 0:
+        return 0
+    return int(parsed)
+
+
+def _coerce_non_negative_float(value: Any) -> float:
+    """Parse to non-negative float with invalid/negative values clamped to 0."""
+    parsed = _parse_numeric(value)
+    if parsed is None or parsed < 0:
+        return 0.0
+    return float(parsed)
+
+
 def append_llm_usage(
     progress: dict[str, Any],
     agent_role: str,
@@ -200,24 +367,32 @@ def append_llm_usage(
     Returns:
         Updated progress dict.
     """
-    # Initialize llm_usage section if it doesn't exist
-    if "llm_usage" not in progress:
-        progress["llm_usage"] = {
-            "runs": [],
-            "total_tokens": 0,
-            "total_cost_usd": 0.0,
-        }
-    
-    llm_usage = progress["llm_usage"]
+    llm_usage_raw = progress.get("llm_usage")
+    if not isinstance(llm_usage_raw, dict):
+        llm_usage_raw = {}
+
+    runs_raw = llm_usage_raw.get("runs")
+    runs: list[dict[str, Any]]
+    if isinstance(runs_raw, list):
+        runs = [run for run in runs_raw if isinstance(run, dict)]
+    else:
+        runs = []
+
+    llm_usage: dict[str, Any] = {
+        "runs": runs,
+        "total_tokens": 0,
+        "total_cost_usd": 0.0,
+    }
+    progress["llm_usage"] = llm_usage
     
     # Create run entry
     run_entry = {
         "agent_role": agent_role,
         "model": response.usage.model,
-        "prompt_tokens": response.usage.prompt_tokens,
-        "completion_tokens": response.usage.completion_tokens,
-        "total_tokens": response.usage.total_tokens,
-        "cost_usd": round(response.usage.cost_usd, 6),
+        "prompt_tokens": _coerce_non_negative_int(response.usage.prompt_tokens),
+        "completion_tokens": _coerce_non_negative_int(response.usage.completion_tokens),
+        "total_tokens": _coerce_non_negative_int(response.usage.total_tokens),
+        "cost_usd": round(_coerce_non_negative_float(response.usage.cost_usd), 6),
         "timestamp": datetime.now(timezone.utc).isoformat(),
         "success": response.success,
     }
@@ -229,9 +404,16 @@ def append_llm_usage(
     llm_usage["runs"].append(run_entry)
     
     # Update totals
-    llm_usage["total_tokens"] = sum(r.get("total_tokens", 0) for r in llm_usage["runs"])
+    llm_usage["total_tokens"] = sum(
+        _coerce_non_negative_int(r.get("total_tokens", 0))
+        for r in llm_usage["runs"]
+    )
     llm_usage["total_cost_usd"] = round(
-        sum(r.get("cost_usd", 0) for r in llm_usage["runs"]), 6
+        sum(
+            _coerce_non_negative_float(r.get("cost_usd", 0.0))
+            for r in llm_usage["runs"]
+        ),
+        6,
     )
     
     return progress
@@ -307,16 +489,11 @@ def run_agent(
         return CompletionResponse(success=False, error=str(e))
     except yaml.YAMLError as e:
         return CompletionResponse(success=False, error=f"YAML parse error: {e}")
+    except ValueError as e:
+        return CompletionResponse(success=False, error=f"YAML format error: {e}")
     
     # Get current agent
-    raw_agent = progress.get("current_agent", "")
-    if isinstance(raw_agent, dict):
-        if "current_agent" in raw_agent:
-            current_agent = str(raw_agent["current_agent"]).strip()
-        else:
-            current_agent = str(raw_agent).strip()
-    else:
-        current_agent = str(raw_agent).strip()
+    current_agent = normalize_current_agent(progress.get("current_agent", ""))
     
     if not current_agent:
         return CompletionResponse(
@@ -351,10 +528,8 @@ def run_agent(
             error=f"Execution not approved for {current_agent}. Use --approve flag to bypass.",
         )
     
-    # Call LLM with optional tool support
-    from mycelium.llm import DEFAULT_MODEL
-    
-    effective_model = model or os.environ.get("MYCELIUM_MODEL", DEFAULT_MODEL)
+    # Resolve model with optional deep-routing policy for bug beads.
+    effective_model, model_source = resolve_model_for_run(progress, model)
     
     # Get tools if enabled
     tools = None
@@ -366,7 +541,12 @@ def run_agent(
         except ImportError as e:
             logger.warning(f"Could not import tools module: {e}")
     
-    logger.info(f"Running {current_agent} agent with model {effective_model}")
+    logger.info(
+        "Running %s agent with model %s (source=%s)",
+        current_agent,
+        effective_model,
+        model_source,
+    )
     
     # Tool execution loop
     max_tool_iterations = 20
@@ -518,14 +698,45 @@ def get_usage_summary(mission_path: str | Path) -> dict[str, Any]:
     
     try:
         progress = load_progress(mission_path)
-    except (FileNotFoundError, yaml.YAMLError):
-        return {"total_tokens": 0, "total_cost_usd": 0.0, "runs": 0}
+    except (FileNotFoundError, yaml.YAMLError, ValueError):
+        return {"total_tokens": 0, "total_cost_usd": 0.0, "runs": 0, "runs_detail": []}
     
-    llm_usage = progress.get("llm_usage", {})
+    llm_usage_raw = progress.get("llm_usage")
+    llm_usage: dict[str, Any] = llm_usage_raw if isinstance(llm_usage_raw, dict) else {}
+    runs_raw = llm_usage.get("runs", [])
+    runs_detail_raw = [run for run in runs_raw if isinstance(run, dict)] if isinstance(runs_raw, list) else []
+    runs_detail: list[dict[str, Any]] = []
+    for run in runs_detail_raw:
+        normalized_run = dict(run)
+        normalized_run["total_tokens"] = _coerce_non_negative_int(run.get("total_tokens", 0))
+        normalized_run["cost_usd"] = _coerce_non_negative_float(run.get("cost_usd", 0.0))
+
+        runs_detail.append(normalized_run)
+
+    total_tokens_raw = _parse_numeric(llm_usage.get("total_tokens", 0))
+    if total_tokens_raw is None or total_tokens_raw < 0:
+        total_tokens = sum(
+            _coerce_non_negative_int(r.get("total_tokens", 0))
+            for r in runs_detail
+        )
+    else:
+        total_tokens = int(total_tokens_raw)
+
+    total_cost_raw = _parse_numeric(llm_usage.get("total_cost_usd", 0.0))
+    if total_cost_raw is None or total_cost_raw < 0:
+        total_cost_usd = round(
+            sum(
+                _coerce_non_negative_float(r.get("cost_usd", 0.0))
+                for r in runs_detail
+            ),
+            6,
+        )
+    else:
+        total_cost_usd = float(total_cost_raw)
     
     return {
-        "total_tokens": llm_usage.get("total_tokens", 0),
-        "total_cost_usd": llm_usage.get("total_cost_usd", 0.0),
-        "runs": len(llm_usage.get("runs", [])),
-        "runs_detail": llm_usage.get("runs", []),
+        "total_tokens": total_tokens,
+        "total_cost_usd": total_cost_usd,
+        "runs": len(runs_detail),
+        "runs_detail": runs_detail,
     }

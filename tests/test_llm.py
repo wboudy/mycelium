@@ -6,6 +6,7 @@ Test mode: SMOKE
 
 from __future__ import annotations
 
+from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -212,6 +213,146 @@ class TestComplete:
         
         assert response.success is True
         assert call_count[0] == 3  # Two failures + one success
+
+    def test_coerces_string_usage_fields(self):
+        """String usage fields should be coerced to non-negative ints."""
+        mock_response = MagicMock()
+        mock_response.choices = [MagicMock()]
+        mock_response.choices[0].message.content = "Test response"
+        mock_response.usage.prompt_tokens = "100"
+        mock_response.usage.completion_tokens = "50"
+        mock_response.usage.total_tokens = "175"
+
+        with patch.dict("os.environ", {"ANTHROPIC_API_KEY": "sk-test"}):
+            with patch("mycelium.llm.litellm.completion", return_value=mock_response):
+                with patch("mycelium.llm._calculate_cost", return_value=0.005) as mock_cost:
+                    response = complete(
+                        messages=[{"role": "user", "content": "Hello"}],
+                        model="anthropic/claude-sonnet-4-20250514",
+                    )
+
+        assert response.success is True
+        assert response.usage.prompt_tokens == 100
+        assert response.usage.completion_tokens == 50
+        assert response.usage.total_tokens == 175
+        mock_cost.assert_called_once_with("anthropic/claude-sonnet-4-20250514", 100, 50)
+
+    def test_clamps_invalid_usage_and_cost(self):
+        """Malformed usage/cost values should clamp to safe numeric defaults."""
+        mock_response = MagicMock()
+        mock_response.choices = [MagicMock()]
+        mock_response.choices[0].message.content = "Test response"
+        mock_response.usage.prompt_tokens = "-9"
+        mock_response.usage.completion_tokens = float("nan")
+        mock_response.usage.total_tokens = "not-a-number"
+
+        with patch.dict("os.environ", {"ANTHROPIC_API_KEY": "sk-test"}):
+            with patch("mycelium.llm.litellm.completion", return_value=mock_response):
+                with patch("mycelium.llm._calculate_cost", side_effect=RuntimeError("boom")) as mock_cost:
+                    response = complete(
+                        messages=[{"role": "user", "content": "Hello"}],
+                        model="anthropic/claude-sonnet-4-20250514",
+                    )
+
+        assert response.success is True
+        assert response.usage.prompt_tokens == 0
+        assert response.usage.completion_tokens == 0
+        assert response.usage.total_tokens == 0
+        assert response.usage.cost_usd == 0.0
+        mock_cost.assert_called_once_with("anthropic/claude-sonnet-4-20250514", 0, 0)
+
+    def test_normalizes_mixed_tool_call_payloads(self):
+        """Mixed object/dict tool_call payloads should normalize and skip invalid entries."""
+        valid_object_tool_call = SimpleNamespace(
+            id="call-obj",
+            function=SimpleNamespace(name="write_file", arguments='{"path":"foo.txt"}'),
+        )
+        valid_dict_tool_call = {
+            "function": {
+                "name": "run_command",
+                "arguments": {"cmd": "ls"},
+            }
+        }
+        invalid_tool_call = {"id": "bad", "function": {"arguments": {"cmd": "pwd"}}}
+
+        mock_response = SimpleNamespace(
+            choices=[
+                SimpleNamespace(
+                    message=SimpleNamespace(
+                        content="Tool payload",
+                        tool_calls=[valid_object_tool_call, valid_dict_tool_call, invalid_tool_call],
+                    )
+                )
+            ],
+            usage=SimpleNamespace(prompt_tokens=10, completion_tokens=4, total_tokens=14),
+        )
+
+        with patch.dict("os.environ", {"ANTHROPIC_API_KEY": "sk-test"}):
+            with patch("mycelium.llm.litellm.completion", return_value=mock_response):
+                with patch("mycelium.llm._calculate_cost", return_value=0.002):
+                    response = complete(messages=[{"role": "user", "content": "Hello"}])
+
+        assert response.success is True
+        assert response.tool_calls is not None
+        assert len(response.tool_calls) == 2
+        assert response.tool_calls[0]["id"] == "call-obj"
+        assert response.tool_calls[0]["name"] == "write_file"
+        assert response.tool_calls[1]["id"] == "tool_call_2"
+        assert response.tool_calls[1]["name"] == "run_command"
+        assert response.tool_calls[1]["arguments"] == '{"cmd": "ls"}'
+
+    def test_normalizes_single_tool_call_payload(self):
+        """Single non-list tool_call payloads should still normalize."""
+        mock_response = SimpleNamespace(
+            choices=[
+                SimpleNamespace(
+                    message=SimpleNamespace(
+                        content="Tool payload",
+                        tool_calls={
+                            "id": "call-single",
+                            "function": {"name": "read_progress", "arguments": "{}"},
+                        },
+                    )
+                )
+            ],
+            usage=SimpleNamespace(prompt_tokens=3, completion_tokens=2, total_tokens=5),
+        )
+
+        with patch.dict("os.environ", {"ANTHROPIC_API_KEY": "sk-test"}):
+            with patch("mycelium.llm.litellm.completion", return_value=mock_response):
+                with patch("mycelium.llm._calculate_cost", return_value=0.001):
+                    response = complete(messages=[{"role": "user", "content": "Hello"}])
+
+        assert response.success is True
+        assert response.tool_calls == [
+            {"id": "call-single", "name": "read_progress", "arguments": "{}"}
+        ]
+
+    def test_normalizes_structured_message_content(self):
+        """Structured provider content payloads should be converted to plain text."""
+        mock_response = SimpleNamespace(
+            choices=[
+                SimpleNamespace(
+                    message=SimpleNamespace(
+                        content=[
+                            {"type": "text", "text": "Alpha"},
+                            SimpleNamespace(text="Beta"),
+                            {"content": "Gamma"},
+                        ],
+                        tool_calls=[],
+                    )
+                )
+            ],
+            usage=SimpleNamespace(prompt_tokens=5, completion_tokens=4, total_tokens=9),
+        )
+
+        with patch.dict("os.environ", {"ANTHROPIC_API_KEY": "sk-test"}):
+            with patch("mycelium.llm.litellm.completion", return_value=mock_response):
+                with patch("mycelium.llm._calculate_cost", return_value=0.001):
+                    response = complete(messages=[{"role": "user", "content": "Hello"}])
+
+        assert response.success is True
+        assert response.content == "Alpha\nBeta\nGamma"
 
     def test_no_retry_on_auth_error(self):
         """Does not retry on authentication errors."""
