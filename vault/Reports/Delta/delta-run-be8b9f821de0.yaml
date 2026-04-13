@@ -1,0 +1,27 @@
+run_id: run-be8b9f821de0
+source_id: src-38805f83
+created_at: '2026-04-10T00:32:47.064486+00:00'
+source_revision:
+  normalized_locator: text_bundle:text_bundle
+  fingerprint: sha256:d6a0b543a2de4e22acdbb88080deefe16fcb737ffd82b7d0ab01f928d451365d
+  prior_fingerprint: null
+pipeline_status: completed
+counts:
+  total_extracted_claims: 0
+  exact_count: 0
+  near_duplicate_count: 0
+  supporting_count: 0
+  contradicting_count: 0
+  new_count: 0
+novelty_score: 0.0
+match_groups:
+  EXACT: []
+  NEAR_DUPLICATE: []
+  SUPPORTING: []
+  CONTRADICTING: []
+  NEW: []
+conflicts: []
+warnings: []
+failures: []
+new_links: []
+follow_up_questions: []

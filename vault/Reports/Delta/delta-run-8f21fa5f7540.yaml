@@ -1,0 +1,39 @@
+run_id: run-8f21fa5f7540
+source_id: src-f6933d7c
+created_at: '2026-04-10T00:32:09.771665+00:00'
+source_revision:
+  normalized_locator: https://x.com/
+  fingerprint: sha256:cd97b96b2e55c15810cc14aee06818ad1beb4bfef7acb4fb5ef1783a10141aee
+  prior_fingerprint: null
+pipeline_status: completed
+counts:
+  total_extracted_claims: 3
+  exact_count: 0
+  near_duplicate_count: 0
+  supporting_count: 0
+  contradicting_count: 0
+  new_count: 3
+novelty_score: 1.0
+match_groups:
+  EXACT: []
+  NEAR_DUPLICATE: []
+  SUPPORTING: []
+  CONTRADICTING: []
+  NEW:
+  - extracted_claim_key: h-a12e386d5c5d
+    match_class: NEW
+    similarity: 0.0
+    existing_claim_id: null
+  - extracted_claim_key: h-28808bd4b4d9
+    match_class: NEW
+    similarity: 0.0
+    existing_claim_id: null
+  - extracted_claim_key: h-272b8878057e
+    match_class: NEW
+    similarity: 0.0
+    existing_claim_id: null
+conflicts: []
+warnings: []
+failures: []
+new_links: []
+follow_up_questions: []

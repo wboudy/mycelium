@@ -1,0 +1,91 @@
+run_id: run-86348e3ff844
+source_id: src-c15bc3a2
+created_at: '2026-04-10T00:42:08.108891+00:00'
+source_revision:
+  normalized_locator: https://arxiv.org/abs/2305.10601
+  fingerprint: sha256:95c7d191e4253e86eaae2359bd393aa3917fe8812064685be96b18789815a30e
+  prior_fingerprint: null
+pipeline_status: completed
+counts:
+  total_extracted_claims: 16
+  exact_count: 0
+  near_duplicate_count: 0
+  supporting_count: 0
+  contradicting_count: 0
+  new_count: 16
+novelty_score: 1.0
+match_groups:
+  EXACT: []
+  NEAR_DUPLICATE: []
+  SUPPORTING: []
+  CONTRADICTING: []
+  NEW:
+  - extracted_claim_key: h-fda00effc8e3
+    match_class: NEW
+    similarity: 0.0
+    existing_claim_id: null
+  - extracted_claim_key: h-c5b4d0cf6c6d
+    match_class: NEW
+    similarity: 0.0
+    existing_claim_id: null
+  - extracted_claim_key: h-deb009dc062c
+    match_class: NEW
+    similarity: 0.0
+    existing_claim_id: null
+  - extracted_claim_key: h-4bfe0a998644
+    match_class: NEW
+    similarity: 0.0
+    existing_claim_id: null
+  - extracted_claim_key: h-65672ef2ff33
+    match_class: NEW
+    similarity: 0.0
+    existing_claim_id: null
+  - extracted_claim_key: h-c5b4d0cf6c6d
+    match_class: NEW
+    similarity: 0.0
+    existing_claim_id: null
+  - extracted_claim_key: h-deb009dc062c
+    match_class: NEW
+    similarity: 0.0
+    existing_claim_id: null
+  - extracted_claim_key: h-4bfe0a998644
+    match_class: NEW
+    similarity: 0.0
+    existing_claim_id: null
+  - extracted_claim_key: h-96718df131a3
+    match_class: NEW
+    similarity: 0.0
+    existing_claim_id: null
+  - extracted_claim_key: h-c3506d98c8b4
+    match_class: NEW
+    similarity: 0.0
+    existing_claim_id: null
+  - extracted_claim_key: h-c5b4d0cf6c6d
+    match_class: NEW
+    similarity: 0.0
+    existing_claim_id: null
+  - extracted_claim_key: h-deb009dc062c
+    match_class: NEW
+    similarity: 0.0
+    existing_claim_id: null
+  - extracted_claim_key: h-4bfe0a998644
+    match_class: NEW
+    similarity: 0.0
+    existing_claim_id: null
+  - extracted_claim_key: h-91b7538adcaf
+    match_class: NEW
+    similarity: 0.0
+    existing_claim_id: null
+  - extracted_claim_key: h-c651f570eefb
+    match_class: NEW
+    similarity: 0.0
+    existing_claim_id: null
+  - extracted_claim_key: h-871bea16d534
+    match_class: NEW
+    similarity: 0.0
+    existing_claim_id: null
+conflicts: []
+warnings: []
+failures: []
+new_links: []
+follow_up_questions: []

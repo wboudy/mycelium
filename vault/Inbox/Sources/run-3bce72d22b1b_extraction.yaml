@@ -1,0 +1,82 @@
+run_id: run-3bce72d22b1b
+source_id: src-15339b76
+created_at: '2026-04-10T00:31:52.429429Z'
+gist: <!DOCTYPE html>
+bullets:
+- <!DOCTYPE html>
+- <html>
+- <head>
+claims:
+- extracted_claim_key: h-4b65b7360078
+  claim_text: Nevertheless, this old man's was a patient hammer wielded by a patient
+    arm.
+  claim_type: empirical
+  polarity: supports
+  provenance:
+    source_id: src-15339b76
+    source_ref: https://httpbin.org/html
+    locator:
+      url: https://httpbin.org/html
+      section: null
+      paragraph_index: null
+      snippet_hash: sha256:23ebd13a87dcb4b94dd4e5b76c9c3fc695ab60d4a4763c5ec34bc2dfc362e79e
+- extracted_claim_key: h-d62fb05bab89
+  claim_text: Silent, slow, and solemn; bowing over still further his chronically
+    broken back, he toiled away, as if toil were life itself, and the heavy beating
+    of his hammer the heavy beating of his heart.
+  claim_type: empirical
+  polarity: supports
+  provenance:
+    source_id: src-15339b76
+    source_ref: https://httpbin.org/html
+    locator:
+      url: https://httpbin.org/html
+      section: null
+      paragraph_index: null
+      snippet_hash: sha256:43d1dc3ea6304d4a4e4634d9d7279cca6967e04ef53c674d03953c322c48bcdd
+- extracted_claim_key: h-4a16c20cc905
+  claim_text: The issue was, the loss of the extremities of both feet.
+  claim_type: empirical
+  polarity: supports
+  provenance:
+    source_id: src-15339b76
+    source_ref: https://httpbin.org/html
+    locator:
+      url: https://httpbin.org/html
+      section: null
+      paragraph_index: null
+      snippet_hash: sha256:2bb65bc92c3213dfcaa9f0bd1d7584e4f1d379f273e1b4fcfa1f5d517c44f219
+- extracted_claim_key: h-bf68918eb4cb
+  claim_text: He was an old man, who, at the age of nearly sixty, had postponedly
+    encountered that thing in sorrow's technicals called ruin.
+  claim_type: empirical
+  polarity: supports
+  provenance:
+    source_id: src-15339b76
+    source_ref: https://httpbin.org/html
+    locator:
+      url: https://httpbin.org/html
+      section: null
+      paragraph_index: null
+      snippet_hash: sha256:d503c5512f6339a93dbb15718afa4b63ce090083d93aabd1e4fc683625820362
+- extracted_claim_key: h-6e5c52b27048
+  claim_text: Now, for prudent, most wise, and economic reasons, the blacksmith's
+    shop was in the basement of his dwelling, but with a separate entrance to it;
+    so that always had the young and loving healthy wife listened with no unhappy
+    nervousness, but with vigorous pleasure, to the stout ringing of her young-armed
+    old husband's hammer; whose reverberations, muffled by passing through the floors
+    and walls, came up to her, not unsweetly, in her nursery; and so, to stout Labor's
+    iron lullaby, the blacksmith's infants were rocked to slumber.
+  claim_type: empirical
+  polarity: opposes
+  provenance:
+    source_id: src-15339b76
+    source_ref: https://httpbin.org/html
+    locator:
+      url: https://httpbin.org/html
+      section: null
+      paragraph_index: null
+      snippet_hash: sha256:d1d1a662fe77dc0746742514b9e0a25f583d23b821b2ddc39c46ddcc19042188
+entities: []
+definitions: []
+warnings: []

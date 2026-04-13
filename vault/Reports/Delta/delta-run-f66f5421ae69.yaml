@@ -1,0 +1,27 @@
+run_id: run-f66f5421ae69
+source_id: src-a1f0119e
+created_at: '2026-04-10T00:40:43.299992+00:00'
+source_revision:
+  normalized_locator: text_bundle:text_bundle
+  fingerprint: sha256:047a7fafc9648d5905d87d6a418e801135dbb1b979e061879a06cd9e4bb3966b
+  prior_fingerprint: null
+pipeline_status: completed
+counts:
+  total_extracted_claims: 0
+  exact_count: 0
+  near_duplicate_count: 0
+  supporting_count: 0
+  contradicting_count: 0
+  new_count: 0
+novelty_score: 0.0
+match_groups:
+  EXACT: []
+  NEAR_DUPLICATE: []
+  SUPPORTING: []
+  CONTRADICTING: []
+  NEW: []
+conflicts: []
+warnings: []
+failures: []
+new_links: []
+follow_up_questions: []

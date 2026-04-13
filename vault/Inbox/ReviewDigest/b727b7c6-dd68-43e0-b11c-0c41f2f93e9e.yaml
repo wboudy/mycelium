@@ -1,0 +1,9 @@
+decision_id: b727b7c6-dd68-43e0-b11c-0c41f2f93e9e
+created_at: '2026-04-10T00:38:18.755482+00:00'
+mode: direct
+actor: human
+reason: Test approval
+results:
+- queue_id: qi-101b3979bcde
+  old_status: pending_review
+  new_status: approved

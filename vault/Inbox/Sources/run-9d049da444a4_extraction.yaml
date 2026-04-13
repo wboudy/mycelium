@@ -1,0 +1,12 @@
+run_id: run-9d049da444a4
+source_id: src-5b69e3ef
+created_at: '2026-04-10T00:38:30.948155Z'
+gist: Another test.
+bullets:
+- Another test.
+claims: []
+entities: []
+definitions: []
+warnings:
+- code: WARN_NO_CLAIMS_EXTRACTED
+  message: No claims were extracted from this source

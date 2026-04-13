@@ -1,0 +1,47 @@
+run_id: run-3bce72d22b1b
+source_id: src-15339b76
+created_at: '2026-04-10T00:31:52.431594+00:00'
+source_revision:
+  normalized_locator: https://httpbin.org/html
+  fingerprint: sha256:3f324f9914742e62cf082861ba03b207282dba781c3349bee9d7c1b5ef8e0bfe
+  prior_fingerprint: null
+pipeline_status: completed
+counts:
+  total_extracted_claims: 5
+  exact_count: 0
+  near_duplicate_count: 0
+  supporting_count: 0
+  contradicting_count: 0
+  new_count: 5
+novelty_score: 1.0
+match_groups:
+  EXACT: []
+  NEAR_DUPLICATE: []
+  SUPPORTING: []
+  CONTRADICTING: []
+  NEW:
+  - extracted_claim_key: h-4b65b7360078
+    match_class: NEW
+    similarity: 0.0
+    existing_claim_id: null
+  - extracted_claim_key: h-d62fb05bab89
+    match_class: NEW
+    similarity: 0.0
+    existing_claim_id: null
+  - extracted_claim_key: h-4a16c20cc905
+    match_class: NEW
+    similarity: 0.0
+    existing_claim_id: null
+  - extracted_claim_key: h-bf68918eb4cb
+    match_class: NEW
+    similarity: 0.0
+    existing_claim_id: null
+  - extracted_claim_key: h-6e5c52b27048
+    match_class: NEW
+    similarity: 0.0
+    existing_claim_id: null
+conflicts: []
+warnings: []
+failures: []
+new_links: []
+follow_up_questions: []
