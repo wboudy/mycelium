@@ -1,0 +1,18 @@
+name: oracle_probe
+description: "Oracle connectivity probe"
+
+documents:
+  readme: "TARGET_VISION.md"
+  spec: "SPEC.md"
+  implementation: "CURRENT_STATE.md"
+
+oracle:
+  model: "5.2 Thinking"
+  thinking_time: heavy
+
+rounds:
+  output_dir: ".apr/rounds/oracle_probe"
+
+template: |
+  Return exactly this line and nothing else:
+  ORACLE_APR_PROBE_OK

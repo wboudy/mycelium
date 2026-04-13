@@ -1,0 +1,72 @@
+name: toy_tiny_progressive
+description: "Tiny progressive prompt workflow to validate round-aware template selection"
+
+documents:
+  readme: "TOY_TARGET_VISION.md"
+  spec: "TOY_TINY_SPEC.md"
+  implementation: "TOY_CURRENT_STATE.md"
+
+oracle:
+  model: "gpt-5.2-pro"
+  keep_browser: true
+  prune_tabs: true
+  browser_model_strategy: "select"
+  thinking_time: "extended"
+  browser_profile_dir: "/Users/williamboudy/Desktop/mycelium/.oracle-profile"
+
+rounds:
+  output_dir: ".apr/rounds/toy_tiny_progressive"
+
+template_round_1: |
+  Read TARGET_VISION, CURRENT_STATE, and SPEC.
+
+  Produce a compact revision (140-220 words) with sections:
+  1. Goals
+  2. Architecture
+  3. Data Model
+  4. Execution Flow
+  5. Acceptance Criteria
+
+  Include this exact marker line at top:
+  ROUND_PROMPT_MARKER: R1
+
+  Constraints:
+  - Output ONLY markdown.
+  - Use MUST/SHOULD/MAY.
+  - At least 3 acceptance criteria.
+
+template_round_2: |
+  Read TARGET_VISION, CURRENT_STATE, and SPEC.
+
+  Refine for explicit interfaces/contracts (140-220 words) with sections:
+  1. Goals
+  2. Architecture
+  3. Data Model
+  4. Execution Flow
+  5. Acceptance Criteria
+
+  Include this exact marker line at top:
+  ROUND_PROMPT_MARKER: R2
+
+  Constraints:
+  - Output ONLY markdown.
+  - Use MUST/SHOULD/MAY.
+  - At least 3 acceptance criteria.
+
+template_round_3: |
+  Read TARGET_VISION, CURRENT_STATE, and SPEC.
+
+  Refine for determinism and testability (140-220 words) with sections:
+  1. Goals
+  2. Architecture
+  3. Data Model
+  4. Execution Flow
+  5. Acceptance Criteria
+
+  Include this exact marker line at top:
+  ROUND_PROMPT_MARKER: R3
+
+  Constraints:
+  - Output ONLY markdown.
+  - Use MUST/SHOULD/MAY.
+  - At least 3 acceptance criteria.

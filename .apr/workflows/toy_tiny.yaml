@@ -1,0 +1,34 @@
+name: toy_tiny
+description: "Tiny toy spec workflow to validate real APR evolution"
+
+documents:
+  readme: "TOY_TARGET_VISION.md"
+  spec: "TOY_TINY_SPEC.md"
+  implementation: "TOY_CURRENT_STATE.md"
+
+oracle:
+  model: "gpt-5.2-pro"
+  keep_browser: true
+  prune_tabs: true
+  browser_model_strategy: "current"
+  thinking_time: "extended"
+  browser_profile_dir: "/Users/williamboudy/Desktop/mycelium/.oracle-profile"
+
+rounds:
+  output_dir: ".apr/rounds/toy_tiny"
+
+template: |
+  Read TARGET_VISION, CURRENT_STATE, and the current spec draft.
+
+  Produce an improved tiny spec in 180-260 words with this exact structure:
+  1. Goals
+  2. Architecture
+  3. Data Model
+  4. Execution Flow
+  5. Acceptance Criteria
+
+  Constraints:
+  - Output ONLY markdown.
+  - Use MUST/SHOULD/MAY where relevant.
+  - Include at least 3 concrete acceptance criteria.
+  - No placeholders.

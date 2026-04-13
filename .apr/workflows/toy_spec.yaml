@@ -1,0 +1,50 @@
+name: toy_spec
+description: "Toy spec workflow for real APR browser run"
+
+documents:
+  readme: "TOY_TARGET_VISION.md"
+  spec: "TOY_SPEC.md"
+  implementation: "TOY_CURRENT_STATE.md"
+
+oracle:
+  model: "gpt-5.2-pro"
+  keep_browser: true
+  browser_model_strategy: "current"
+  browser_profile_dir: "/Users/williamboudy/Desktop/mycelium/.oracle-profile"
+
+rounds:
+  output_dir: ".apr/rounds/toy_spec"
+
+template: |
+  First, read TARGET_VISION:
+
+  ```
+  <contents of README will be included by oracle>
+  ```
+
+  Then read CURRENT_STATE:
+
+  ```
+  <contents of implementation will be included by oracle>
+  ```
+
+  Then rewrite the spec from scratch using this seed:
+
+  ```
+  <contents of spec will be included by oracle>
+  ```
+
+  Output requirements:
+  - Output ONLY markdown spec content.
+  - 500-800 words.
+  - Normative requirements using MUST/SHOULD/MAY.
+  - Include these sections exactly:
+    1. Goals
+    2. Non-Goals
+    3. Architecture
+    4. Data Model
+    5. Interfaces
+    6. Execution Flow
+    7. Acceptance Criteria
+  - Every MUST statement needs at least one testable acceptance criterion.
+  - No fluff and no placeholders.
