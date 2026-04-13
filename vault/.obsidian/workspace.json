@@ -1,0 +1,230 @@
+{
+  "main": {
+    "id": "a41f3cab0d111277",
+    "type": "split",
+    "children": [
+      {
+        "id": "e2f3529371a49d80",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "88151f1495a24f46",
+            "type": "leaf",
+            "state": {
+              "type": "markdown",
+              "state": {
+                "file": "MOCs/moc - Vault.md",
+                "mode": "source",
+                "source": false
+              },
+              "icon": "lucide-file",
+              "title": "moc - Vault"
+            }
+          },
+          {
+            "id": "c63884c74b21bd86",
+            "type": "leaf",
+            "state": {
+              "type": "markdown",
+              "state": {
+                "file": "MOCs/moc - Vault.md",
+                "mode": "source",
+                "source": false
+              },
+              "icon": "lucide-file",
+              "title": "moc - Vault"
+            }
+          }
+        ],
+        "currentTab": 1
+      }
+    ],
+    "direction": "vertical"
+  },
+  "left": {
+    "id": "bd0a38922657b1a9",
+    "type": "split",
+    "children": [
+      {
+        "id": "193af7fdbdea836a",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "13aed2e2575da142",
+            "type": "leaf",
+            "state": {
+              "type": "file-explorer",
+              "state": {
+                "sortOrder": "alphabetical",
+                "autoReveal": false
+              },
+              "icon": "lucide-folder-closed",
+              "title": "Files"
+            }
+          },
+          {
+            "id": "bdc08e80a8b102a2",
+            "type": "leaf",
+            "state": {
+              "type": "search",
+              "state": {
+                "query": "",
+                "matchingCase": false,
+                "explainSearch": false,
+                "collapseAll": false,
+                "extraContext": false,
+                "sortOrder": "alphabetical"
+              },
+              "icon": "lucide-search",
+              "title": "Search"
+            }
+          },
+          {
+            "id": "43c7bb111129da59",
+            "type": "leaf",
+            "state": {
+              "type": "bookmarks",
+              "state": {},
+              "icon": "lucide-bookmark",
+              "title": "Bookmarks"
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "horizontal",
+    "width": 200
+  },
+  "right": {
+    "id": "0130a5c5ad00c332",
+    "type": "split",
+    "children": [
+      {
+        "id": "87d64186f4636ec2",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "472e00ca85b8f891",
+            "type": "leaf",
+            "state": {
+              "type": "backlink",
+              "state": {
+                "file": "Inbox/Sources/pure deep learning outperforms statistical methods for time series forecasting.md",
+                "collapseAll": false,
+                "extraContext": false,
+                "sortOrder": "alphabetical",
+                "showSearch": false,
+                "searchQuery": "",
+                "backlinkCollapsed": false,
+                "unlinkedCollapsed": true
+              },
+              "icon": "links-coming-in",
+              "title": "Backlinks for pure deep learning outperforms statistical methods for time series forecasting"
+            }
+          },
+          {
+            "id": "fe43c92cd0560e4d",
+            "type": "leaf",
+            "state": {
+              "type": "outgoing-link",
+              "state": {
+                "file": "Inbox/Sources/pure deep learning outperforms statistical methods for time series forecasting.md",
+                "linksCollapsed": false,
+                "unlinkedCollapsed": true
+              },
+              "icon": "links-going-out",
+              "title": "Outgoing links from pure deep learning outperforms statistical methods for time series forecasting"
+            }
+          },
+          {
+            "id": "6f9f2f4eecc9121c",
+            "type": "leaf",
+            "state": {
+              "type": "tag",
+              "state": {
+                "sortOrder": "frequency",
+                "useHierarchy": true,
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-tags",
+              "title": "Tags"
+            }
+          },
+          {
+            "id": "25d6cd1d6d790020",
+            "type": "leaf",
+            "state": {
+              "type": "all-properties",
+              "state": {
+                "sortOrder": "frequency",
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-archive",
+              "title": "All properties"
+            }
+          },
+          {
+            "id": "86d6397c46cf73c2",
+            "type": "leaf",
+            "state": {
+              "type": "outline",
+              "state": {
+                "file": "Inbox/Sources/pure deep learning outperforms statistical methods for time series forecasting.md",
+                "followCursor": false,
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-list",
+              "title": "Outline of pure deep learning outperforms statistical methods for time series forecasting"
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "horizontal",
+    "width": 300,
+    "collapsed": true
+  },
+  "left-ribbon": {
+    "hiddenItems": {
+      "switcher:Open quick switcher": false,
+      "graph:Open graph view": false,
+      "canvas:Create new canvas": false,
+      "daily-notes:Open today's daily note": false,
+      "templates:Insert template": false,
+      "command-palette:Open command palette": false,
+      "bases:Create new base": false
+    }
+  },
+  "active": "c63884c74b21bd86",
+  "lastOpenFiles": [
+    "Sources/world models learn compressed representations of environment dynamics enabling planning and prediction without direct interaction.md",
+    "Sources/treating soccer match events as a language enables transformer-based next-event prediction and novel metric creation.md",
+    "Sources/teaching LLMs to internalize search processes as linearized reasoning traces enables System 2 thinking without external search.md",
+    "Sources/superforecasters achieve 0.08 Brier scores through reference class reasoning and calibrated probability updates.md",
+    "Sources/self-supervised video prediction in latent space yields world models that transfer to zero-shot robot planning.md",
+    "Sources/Self-RAG teaches models to generate inline reflection tokens that decide when to retrieve and whether retrieved content is relevant.md",
+    "Sources/running diffusion in a learned latent space makes high-resolution image synthesis accessible on consumer hardware.md",
+    "Sources/role-separated agent pipelines with human gates at each handoff produce more reliable output than monolithic autonomous agents.md",
+    "Sources/reusable prompt skill libraries standardize agent workflows across sessions and prevent re-invention of solved patterns.md",
+    "Sources/replacing token-level chain-of-thought with discrete state machine actions improves retrieval while cutting tokens by 74 percent.md",
+    "Sources/reinforcement learning can be reduced to sequence modeling by conditioning a transformer on desired returns.md",
+    "Sources/RAG-based forecasting systems approach human-level calibration by retrieving and synthesizing evidence before predicting.md",
+    "Sources/pure reinforcement learning without human demonstrations produces superior reasoning in LLMs.md",
+    "Sources/pure deep learning outperforms statistical methods for time series forecasting.md",
+    "Sources/progressive multi-step causal inference outperforms single-step methods for out-of-distribution generalization on graphs.md",
+    "Sources/process reward models that verify each reasoning step outperform outcome-only supervision for mathematical problem solving.md",
+    "Sources/pretrained time series foundation models extend from univariate to multivariate and covariate-informed forecasting via group attention.md",
+    "Sources/periodicity-aware tokenization enables a 1.3M parameter model to outperform 700M parameter time series foundation models.md",
+    "Sources/orchestrating 20 to 30 parallel coding agents requires Kubernetes-like infrastructure not just a better IDE.md",
+    "Sources/non-Markovian diffusion processes enable deterministic sampling that is 10x to 50x faster than DDPMs.md",
+    "Sources/multi-agent coordination degrades performance on sequential tasks by 39 to 70 percent despite helping on parallelizable ones.md",
+    "Sources/modality-specific experts outperform treating time series as text tokens for financial forecasting with interleaved data.md",
+    "Sources/LLMs show strong strategic reasoning about ongoing conflicts but are more reliable on economic constraints than political ambiguity.md",
+    "Sources/LLMs consistently resist incorporating external feedback even when it is near-perfect and they claim to understand it.md",
+    "Sources/learning a world model and planning in imagination masters diverse domains with a single fixed configuration.md",
+    "Sources/learning a model that predicts planning-relevant quantities eliminates the need for known environment dynamics.md"
+  ]
+}
