@@ -1,0 +1,3 @@
+[submodule "tools/apr"]
+	path = tools/apr
+	url = https://github.com/Dicklesworthstone/automated_plan_reviser_pro

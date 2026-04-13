@@ -1,0 +1,15 @@
+{
+  "name": "mycelium",
+  "version": "1.0.0",
+  "description": "A **human-gated** multi-agent workflow for AI-assisted development. Unlike fully autonomous tools, Mycelium enforces separation of concerns and keeps all agent logic in auditable files.",
+  "main": "index.js",
+  "directories": {
+    "test": "tests"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC"
+}
