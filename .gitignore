@@ -55,3 +55,18 @@ sandbox/toy-*/
 
 # bv (beads viewer) local config and caches
 .bv/
+
+# APR runtime state (not source)
+.apr/.locks/
+.apr/rounds/
+.apr/analytics/
+
+# Oracle browser profile (auth/session data)
+.oracle-profile/
+
+# Local backups
+*.backup
+.beads/*.local-backup
+
+# tldr runtime status
+.tldr/status
